@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Be Kobe">
+<meta name="theme-color" content="#f2f0eb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>Let's be Kobe</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="view"></main>
+<nav id="tabs" aria-label="Main">
+  <button data-tab="today" data-icon="today">Today</button>
+  <button data-tab="journal" data-icon="journal">Journal</button>
+  <button data-tab="progress" data-icon="progress">Progress</button>
+  <button data-tab="coach" data-icon="coach">Coach</button>
+</nav>
+<div id="sheet" hidden></div>
+<div id="timer" hidden></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
