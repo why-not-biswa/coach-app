@@ -5,16 +5,27 @@
   // rest (seconds), m (muscles), pl (plane), j (joint actions), c (contraction), from/to (season block range), q (video search)
   function X(id, name, dose, why, o) { return Object.assign({ id: id, name: name, dose: dose, why: why, k: 'reps', sets: 1, rest: 60, m: [] }, o || {}); }
 
-  // Tennis-ball series: run as timed steps inside the exercise (player shows one drill at a time).
+  // Tennis-ball series: run as timed steps inside the exercise (player shows one drill at a time). q = video search words.
   var DRILLS = [
-    { n: 'Wall toss, alternate hands', d: 'Stand 1.5 m from the wall. Throw and catch, right then left. Keep a steady rhythm.' },
-    { n: 'Cross catch', d: 'Throw with the right, catch with the left. Halfway, switch sides.' },
-    { n: 'Single-leg wall toss', d: 'Stand on one leg and toss. Halfway, switch legs. Grip the floor with the foot.' },
-    { n: 'Peripheral catch', d: 'Fix your eyes on one mark. Toss the ball to the edge of your vision and catch it without moving your eyes.' },
-    { n: 'Drop catch', d: 'Hold the ball at shoulder height, drop it, and catch it with the other hand before the second bounce.' },
-    { n: 'Foot control', d: 'Tap the ball with alternate soles, then roll it in a figure 8 between your feet.' },
-    { n: 'Two-ball wall juggle', d: 'Two balls against the wall, one in each hand. Stay relaxed.', from: 1 }
+    { n: 'Wall toss, alternate hands', d: 'Stand 1.5 m from the wall. Throw and catch, right then left. Keep a steady rhythm.', q: 'tennis ball wall toss alternate hands drill' },
+    { n: 'Cross catch', d: 'Throw with the right, catch with the left. Halfway, switch sides.', q: 'tennis ball cross catch drill' },
+    { n: 'Single-leg wall toss', d: 'Stand on one leg and toss. Halfway, switch legs. Grip the floor with the foot.', q: 'single leg tennis ball wall toss balance drill' },
+    { n: 'Peripheral catch', d: 'Fix your eyes on one mark. Toss the ball to the edge of your vision and catch it without moving your eyes.', q: 'peripheral vision ball catch drill' },
+    { n: 'Drop catch', d: 'Hold the ball at shoulder height, drop it, and catch it with the other hand before the second bounce.', q: 'tennis ball drop catch reaction drill' },
+    { n: 'Foot control', d: 'Tap the ball with alternate soles, then roll it in a figure 8 between your feet.', q: 'tennis ball foot control drill' },
+    { n: 'Two-ball wall juggle', d: 'Two balls against the wall, one in each hand. Stay relaxed.', from: 1, q: 'two ball wall juggle drill' }
   ];
+  // parts: one exercise item made of steps that the player runs one by one, each with its own timer and video search.
+  // { n: name, s: seconds (timed) OR r: reps / x: text such as '20 m' (waits for a tap), sets (default 1),
+  //   rest: seconds after each set (and before the next part), q: video search words, d: how-to text }.
+  // The item keeps its ID, so logs stay the same. Each split keeps the coach's total time and dose.
+  // Coach to confirm (the dose does not give the split):
+  //   m_cars (90 s over 7 joints), n_cat (60 + 30 + 30), n_9090 (60 s for the switches),
+  //   n_neck (20 s for 10 nods; wrist stretches 15 s each, one arm), r_yoga (all part times),
+  //   fa_wu (8 min = 4 × 2 min), fb_wu (6 min = 3 × 2 min),
+  //   fb_drill (A-skip and B-skip 2 × 20 m each; 30 s rest between sets),
+  //   a_plate (2 × 6 / direction of each movement, one movement at a time), b_ytw (wrist circles 6 / direction),
+  //   b_cd4 and b_cd5 (right side first).
   var TENNIS = [
     'Wall toss, alternate hands, 1.5 m from the wall (60 s): both hands, rhythm',
     'Cross catch: throw right, catch left (30 s / side): timing',
@@ -30,8 +41,18 @@
   S.morning = { id: 'morning', name: 'Morning flow', short: 'AM', load: 'Low', mins: 10, items: [
     X('m_croc', 'Crocodile breathing', '6 breaths · 4 s in / 6 s out · nose', 'Breath leads. The diaphragm pumps lymph and venous blood; the lymph system has no pump of its own. Stops desk chest-breathing.', { sec: 'Wake up', k: 'timed', s: 60, m: ['abs', 'lowback'], pl: 'n/a', j: 'Diaphragm', c: 'Breathing' }),
     X('m_roll', 'Tennis-ball foot roll', '30 s / foot', 'Fascia work. Rolling the sole gave short-term hamstring and ankle range gains; half the gain came in the first 2 min (Wilke 2021).', { sec: 'Wake up', k: 'hold', sets: 2, s: 30, rest: 5, m: ['feet'], c: 'Pressure' }),
-    X('m_foot', 'Short foot holds + towel scrunches', '5 × 5 s / foot, then 30 s scrunches', 'Flat feet. Short foot improved foot posture in programs over 6 weeks (Cheng 2024). Towel scrunches kept by your choice.', { sec: 'Wake up', k: 'hold', sets: 10, s: 5, rest: 5, m: ['feet', 'tibialis'], pl: 'Frontal', j: 'Arch lift', c: 'Isometric' }),
-    X('m_cars', 'Joint circles (CARs)', '2 slow circles / direction: neck, shoulders, elbows, wrists, hips, knees, ankles', 'Bulletproof joints every day. Neck: pain-free range only, no far tilt back.', { sec: 'Joints', k: 'timed', s: 90, m: ['neck', 'delts', 'forearms', 'hipflexors', 'glutes', 'calves'], pl: 'All', j: 'All joints', c: 'Controlled rotation' }),
+    X('m_foot', 'Short foot holds + towel scrunches', '5 × 5 s / foot, then 30 s scrunches', 'Flat feet. Short foot improved foot posture in programs over 6 weeks (Cheng 2024). Towel scrunches kept by your choice.', { sec: 'Wake up', k: 'hold', m: ['feet', 'tibialis'], pl: 'Frontal', j: 'Arch lift', c: 'Isometric', parts: [
+      { n: 'Short foot hold · left', s: 5, sets: 5, rest: 5, q: 'short foot exercise' },
+      { n: 'Short foot hold · right', s: 5, sets: 5, rest: 5, q: 'short foot exercise' },
+      { n: 'Towel scrunches', s: 30, q: 'towel scrunches foot exercise' }] }),
+    X('m_cars', 'Joint circles (CARs)', '2 slow circles / direction: neck, shoulders, elbows, wrists, hips, knees, ankles', 'Bulletproof joints every day. Neck: pain-free range only, no far tilt back.', { sec: 'Joints', k: 'timed', m: ['neck', 'delts', 'forearms', 'hipflexors', 'glutes', 'calves'], pl: 'All', j: 'All joints', c: 'Controlled rotation', parts: [
+      { n: 'Neck circles', s: 12, q: 'neck CARs controlled articular rotation' },
+      { n: 'Shoulder circles', s: 13, q: 'shoulder CARs controlled articular rotation' },
+      { n: 'Elbow circles', s: 13, q: 'elbow CARs controlled articular rotation' },
+      { n: 'Wrist circles', s: 13, q: 'wrist CARs controlled articular rotation' },
+      { n: 'Hip circles', s: 13, q: 'hip CARs controlled articular rotation' },
+      { n: 'Knee circles', s: 13, q: 'knee CARs controlled articular rotation' },
+      { n: 'Ankle circles', s: 13, q: 'ankle CARs controlled articular rotation' }] }),
     X('m_surya', 'Surya Namaskar', '2 slow rounds · 1 breath per pose', 'Yoga. Hip flexion and extension, ankle dorsiflexion in Downward Dog, spine flexion and extension.', { sec: 'Joints', k: 'timed', s: 120, m: ['hipflexors', 'hamstrings', 'calves', 'lowback', 'chest', 'delts'], pl: 'Sagittal', j: 'Hip, spine, ankle', c: 'Dynamic' }),
     X('m_rope', 'Easy rope skipping (or bounce in place)', '45 s · relaxed', 'Calf muscle pump moves lymph and blood. Ankle stiffness for footwork. Rope is a core ProBodX tool.', { sec: 'Joints', k: 'timed', s: 45, m: ['calves', 'feet'], pl: 'Sagittal', j: 'Ankle', c: 'Fast SSC' }),
     X('m_span', 'Spanish squat hold (band behind knees)', '1 × 30–45 s', 'Quad and knee-tendon load with low knee shear. Protects the knees from jump volume.', { sec: 'Basic strength · Flow A', flow: 'A', k: 'hold', s: 40, m: ['quads'], pl: 'Sagittal', j: 'Knee flexion hold', c: 'Isometric' }),
@@ -44,14 +65,35 @@
   ]};
 
   S.night = { id: 'night', name: 'Night release', short: 'PM', load: 'Low', mins: 20, items: [
-    X('n_cat', 'Cat–cow, then thread the needle', '2 min · breath-led', 'Spine flexion, extension, rotation after the desk.', { k: 'timed', s: 120, m: ['lowback', 'upperback'], pl: 'Sagittal + Transverse', j: 'Spine', c: 'Dynamic' }),
-    X('n_ball', 'Tennis-ball release: forearm extensors, upper traps', '45 s R forearm · 30 s L · 30 s / trap', 'Tennis elbow and traps. Short-term relief; the strength work fixes the tendon.', { k: 'timed', s: 135, m: ['forearms', 'traps'], c: 'Pressure' }),
+    X('n_cat', 'Cat–cow, then thread the needle', '2 min · breath-led', 'Spine flexion, extension, rotation after the desk.', { k: 'timed', m: ['lowback', 'upperback'], pl: 'Sagittal + Transverse', j: 'Spine', c: 'Dynamic', parts: [
+      { n: 'Cat–cow', s: 60, q: 'cat cow stretch' },
+      { n: 'Thread the needle · left', s: 30, q: 'thread the needle stretch' },
+      { n: 'Thread the needle · right', s: 30, q: 'thread the needle stretch' }] }),
+    X('n_ball', 'Tennis-ball release: forearm extensors, upper traps', '45 s R forearm · 30 s L · 30 s / trap', 'Tennis elbow and traps. Short-term relief; the strength work fixes the tendon.', { k: 'timed', m: ['forearms', 'traps'], c: 'Pressure', parts: [
+      { n: 'Forearm extensors · right', s: 45, q: 'tennis ball forearm extensor release' },
+      { n: 'Forearm extensors · left', s: 30, q: 'tennis ball forearm extensor release' },
+      { n: 'Upper trap · right', s: 30, q: 'tennis ball upper trap release' },
+      { n: 'Upper trap · left', s: 30, q: 'tennis ball upper trap release' }] }),
     X('n_hip', 'Half-kneeling hip-flexor stretch (glute squeezed, arm up)', '60 s / side', 'Opens hip extension. The desk keeps hips in flexion; power comes from extension.', { k: 'hold', sets: 2, s: 60, rest: 5, m: ['hipflexors', 'quads'], pl: 'Sagittal', j: 'Hip extension', c: 'Static stretch' }),
-    X('n_calf', 'Wall calf stretch: straight knee, then bent knee', '30 s + 30 s / leg', 'Tight ankles. Static calf stretch: about 2–3° gain (Young 2013).', { k: 'hold', sets: 4, s: 30, rest: 5, m: ['calves'], pl: 'Sagittal', j: 'Dorsiflexion', c: 'Static stretch' }),
+    X('n_calf', 'Wall calf stretch: straight knee, then bent knee', '30 s + 30 s / leg', 'Tight ankles. Static calf stretch: about 2–3° gain (Young 2013).', { k: 'hold', m: ['calves'], pl: 'Sagittal', j: 'Dorsiflexion', c: 'Static stretch', parts: [
+      { n: 'Straight knee · left', s: 30, rest: 5, q: 'wall calf stretch straight knee gastrocnemius' },
+      { n: 'Bent knee · left', s: 30, rest: 5, q: 'wall calf stretch bent knee soleus' },
+      { n: 'Straight knee · right', s: 30, rest: 5, q: 'wall calf stretch straight knee gastrocnemius' },
+      { n: 'Bent knee · right', s: 30, q: 'wall calf stretch bent knee soleus' }] }),
     X('n_ham', 'Hamstring: nerve sliders (if self-test positive) or strap stretch', '2 × 10 / side, or 45 s / side', 'Ankle position changes hamstring range through nerve tension. Gentle sliding if the nerve is the cause.', { k: 'reps', sets: 4, reps: 10, rest: 10, m: ['hamstrings'], pl: 'Sagittal', j: 'Hip flexion, knee extension', c: 'Neural glide' }),
-    X('n_9090', '90/90 hip switches, then hold each side', '6 switches · 30 s / side', 'Hip internal and external rotation: base of rotational power.', { k: 'timed', s: 120, m: ['glutes', 'adductors', 'hipflexors'], pl: 'Transverse', j: 'Hip rotation', c: 'Dynamic + hold' }),
-    X('n_squat', 'Supported deep squat, then child\'s pose', '60 s + 30 s', 'More time at depth; begin relaxation.', { k: 'timed', s: 90, m: ['quads', 'glutes', 'adductors', 'lowback'], c: 'Isometric (long-length)' }),
-    X('n_neck', 'Neck side stretch, chin nods, wrist stretches', '20 s / side · 10 nods · 15 s each', 'Neck and wrists every day. No neck extension.', { k: 'timed', s: 90, m: ['neck', 'traps', 'forearms'], c: 'Static stretch' }),
+    X('n_9090', '90/90 hip switches, then hold each side', '6 switches · 30 s / side', 'Hip internal and external rotation: base of rotational power.', { k: 'timed', m: ['glutes', 'adductors', 'hipflexors'], pl: 'Transverse', j: 'Hip rotation', c: 'Dynamic + hold', parts: [
+      { n: '90/90 hip switches · 6 slow', s: 60, q: '90 90 hip switch' },
+      { n: '90/90 hold · left', s: 30, q: '90 90 hip stretch' },
+      { n: '90/90 hold · right', s: 30, q: '90 90 hip stretch' }] }),
+    X('n_squat', 'Supported deep squat, then child\'s pose', '60 s + 30 s', 'More time at depth; begin relaxation.', { k: 'timed', m: ['quads', 'glutes', 'adductors', 'lowback'], c: 'Isometric (long-length)', parts: [
+      { n: 'Supported deep squat', s: 60, q: 'supported deep squat hold' },
+      { n: 'Child\'s pose', s: 30, q: 'child\'s pose' }] }),
+    X('n_neck', 'Neck side stretch, chin nods, wrist stretches', '20 s / side · 10 nods · 15 s each', 'Neck and wrists every day. No neck extension.', { k: 'timed', m: ['neck', 'traps', 'forearms'], c: 'Static stretch', parts: [
+      { n: 'Neck side stretch · left', s: 20, q: 'neck side stretch' },
+      { n: 'Neck side stretch · right', s: 20, q: 'neck side stretch' },
+      { n: 'Chin nods · 10 slow', s: 20, q: 'chin nod deep neck flexor exercise' },
+      { n: 'Wrist flexor stretch', s: 15, q: 'wrist flexor stretch' },
+      { n: 'Wrist extensor stretch', s: 15, q: 'wrist extensor stretch' }] }),
     X('n_sigh', 'Legs up the wall + cyclic sighing', '5 min · 2 nose inhales, 1 long mouth exhale', 'Cyclic sighing 5 min/day improved mood more than meditation (Balban 2023). Slow breathing raises vagal HRV (Laborde 2022).', { k: 'timed', s: 300, m: ['abs'], c: 'Breathing' })
   ]};
 
@@ -83,13 +125,19 @@
     X('a_sciss', 'Scissor tuck jumps', 'Block 1 onward', 'High landing force. Wait until landings are clean.', { sec: 'Plyos', from: 1, sets: 3, reps: 4, rest: 75, m: ['quads', 'hipflexors', 'glutes'], pl: 'Sagittal', c: 'Slow SSC' }),
     X('a_drop', 'Drop jumps', 'Block 2 onward · 30–45 cm', 'Verkhoshansky shock method. Prerequisite: drop-and-stick in Block 1.', { sec: 'Plyos', from: 2, sets: 3, reps: 4, rest: 90, m: ['calves', 'quads', 'glutes'], pl: 'Sagittal', c: 'Fast SSC (shock)' }),
     X('a_scoop', 'Medicine-ball rotational scoop toss to a wall', '3 × 5 / side', 'Hip-led rotation, the chain of a hook. Ballistic: no slowing at the end.', { sec: 'Throws', sets: 3, reps: 5, rest: 60, m: ['obliques', 'glutes', 'abs'], pl: 'Transverse', j: 'Hip and trunk rotation', c: 'Ballistic' }),
-    X('a_plate', 'Single-plate series (Russian): halos, around-the-world, chops', '2 × 6 / direction · 5–10 kg', 'Shoulder mobility under load; rotation and anti-rotation.', { sec: 'Throws', sets: 2, reps: 6, rest: 45, m: ['delts', 'obliques', 'abs', 'traps'], pl: 'Transverse + Frontal', j: 'Shoulder, trunk', c: 'Dynamic' }),
+    X('a_plate', 'Single-plate series (Russian): halos, around-the-world, chops', '2 × 6 / direction · 5–10 kg', 'Shoulder mobility under load; rotation and anti-rotation.', { sec: 'Throws', rest: 45, m: ['delts', 'obliques', 'abs', 'traps'], pl: 'Transverse + Frontal', j: 'Shoulder, trunk', c: 'Dynamic', parts: [
+      { n: 'Plate halos', r: 6, x: '6 / direction', sets: 2, rest: 45, q: 'plate halo exercise' },
+      { n: 'Plate around-the-world', r: 6, x: '6 / direction', sets: 2, rest: 45, q: 'plate around the world exercise' },
+      { n: 'Plate chops', r: 6, x: '6 / direction', sets: 2, rest: 45, q: 'plate wood chop exercise' }] }),
     X('a_goblet', 'Goblet squat to a box (Block 2: barbell front squat)', '3 × 8 · RPE 6–7', 'Thighs. Weight in front = counterbalance for the deep squat.', { sec: 'Strength', sets: 3, reps: 8, rest: 120, m: ['quads', 'glutes', 'adductors'], pl: 'Sagittal', j: 'Hip and knee extension', c: 'Concentric + eccentric' }),
     X('a_step', 'Front-rack step-up', '3 × 8 / side · knee-height box', 'Single-leg drive like the rear leg in a cross. Upright posture.', { sec: 'Strength', sets: 3, reps: 8, rest: 90, m: ['quads', 'glutes', 'upperback'], pl: 'Sagittal', j: 'Hip and knee extension', c: 'Concentric' }),
     X('a_rfe', 'Rear-foot-elevated single-leg deadlift', '3 × 8 / side', 'Hamstrings, glutes, balance; arch control for flat feet.', { sec: 'Strength', sets: 3, reps: 8, rest: 90, m: ['hamstrings', 'glutes', 'lowback', 'feet'], pl: 'Sagittal', j: 'Hip hinge', c: 'Eccentric + concentric' }),
     X('a_curtsy', 'Landmine curtsy lunge (angled barbell)', '2 × 8 / side', 'Hip control in frontal and transverse planes; protects the knee when you pivot.', { sec: 'Strength', sets: 2, reps: 8, rest: 75, m: ['glutes', 'adductors', 'quads'], pl: 'Frontal + Transverse', j: 'Hip adduction, rotation', c: 'Eccentric + concentric' }),
     X('a_nordic', 'Nordic curl (feet under padded loaded barbell)', '2 × 3 slow lowers', 'About 50% fewer hamstring injuries (van Dyk 2019). Catch with your hands.', { sec: 'Strength', sets: 2, reps: 3, rest: 120, m: ['hamstrings'], pl: 'Sagittal', j: 'Knee flexion', c: 'Eccentric' }),
-    X('a_calf', 'Calf raise (straight + bent knee, 3 s down) + tibialis raise', '2 × 12 each · 2 × 15', 'Calves, ankles, knees. Tibialis supports the arch and shins.', { sec: 'Strength', sets: 4, reps: 12, rest: 45, m: ['calves', 'tibialis'], pl: 'Sagittal', j: 'Plantar / dorsiflexion', c: 'Eccentric focus' }),
+    X('a_calf', 'Calf raise (straight + bent knee, 3 s down) + tibialis raise', '2 × 12 each · 2 × 15', 'Calves, ankles, knees. Tibialis supports the arch and shins.', { sec: 'Strength', rest: 45, m: ['calves', 'tibialis'], pl: 'Sagittal', j: 'Plantar / dorsiflexion', c: 'Eccentric focus', parts: [
+      { n: 'Calf raise · straight knee, 3 s down', r: 12, sets: 2, rest: 45, q: 'straight knee calf raise slow eccentric' },
+      { n: 'Calf raise · bent knee, 3 s down', r: 12, sets: 2, rest: 45, q: 'bent knee calf raise soleus' },
+      { n: 'Tibialis raise', r: 15, sets: 2, rest: 45, q: 'tibialis raise' }] }),
     X('a_twist', 'Medicine-ball throws in a Russian twist', '2 × 10 / side · 3–4 kg', 'Rotational power with a release.', { sec: 'Loaded core', sets: 2, reps: 10, rest: 45, m: ['obliques', 'abs'], pl: 'Transverse', j: 'Trunk rotation', c: 'Ballistic' }),
     X('a_seesaw', 'Weighted see-saws (form to confirm)', '2 × 8 / side', 'Your listed exercise. Dose set when the form is confirmed.', { sec: 'Loaded core', sets: 2, reps: 8, rest: 45, m: ['abs', 'obliques'], c: 'TBC' }),
     X('a_kswing', 'Barbell knee swings (form to confirm)', '2 × 8 / side', 'Your listed exercise. Dose set when the form is confirmed.', { sec: 'Loaded core', sets: 2, reps: 8, rest: 45, m: ['abs', 'obliques', 'hipflexors'], c: 'TBC' }),
@@ -98,14 +146,25 @@
     X('a_cd2', 'Half-kneeling quad and hip-flexor stretch', '30 s / side', 'Quads and hip flexors after squats, step-ups, lunges.', { sec: 'Cool-down', k: 'hold', sets: 2, s: 30, rest: 5, m: ['quads', 'hipflexors'], c: 'Static stretch' }),
     X('a_cd3', 'Standing hamstring stretch, light', '20 s / side', 'After Nordics and RDLs. Light: eccentric damage, do not force range.', { sec: 'Cool-down', k: 'hold', sets: 2, s: 20, rest: 5, m: ['hamstrings'], c: 'Static stretch' }),
     X('a_cd4', 'Adductor rock-back', '8 slow rocks / side', 'Adductors after Cossacks and lateral jumps.', { sec: 'Cool-down', sets: 2, reps: 8, rest: 5, m: ['adductors'], c: 'Dynamic stretch' }),
-    X('a_cd5', 'Wall calf stretch: straight, then bent knee', '15 s + 15 s / leg', 'Calves and Achilles after pogos.', { sec: 'Cool-down', k: 'hold', sets: 4, s: 15, rest: 3, m: ['calves'], c: 'Static stretch' }),
+    X('a_cd5', 'Wall calf stretch: straight, then bent knee', '15 s + 15 s / leg', 'Calves and Achilles after pogos.', { sec: 'Cool-down', k: 'hold', m: ['calves'], c: 'Static stretch', parts: [
+      { n: 'Straight knee · left', s: 15, rest: 3, q: 'wall calf stretch straight knee gastrocnemius' },
+      { n: 'Bent knee · left', s: 15, rest: 3, q: 'wall calf stretch bent knee soleus' },
+      { n: 'Straight knee · right', s: 15, rest: 3, q: 'wall calf stretch straight knee gastrocnemius' },
+      { n: 'Bent knee · right', s: 15, q: 'wall calf stretch bent knee soleus' }] }),
     X('a_cd6', '90/90 breathing (feet on a box)', '45 s · long exhale', 'Moves the body toward rest.', { sec: 'Cool-down', k: 'timed', s: 45, m: ['abs'], c: 'Breathing' })
   ]};
 
   S.gymB = { id: 'gymB', name: 'Gym B · pull, push, rotation', short: 'GYM B', load: 'Med–High', mins: 90, items: [
     X('b_rope', 'Rope skipping', '2 min', 'Raise temperature.', { sec: 'Warm-up', k: 'timed', s: 120, m: ['calves'] }),
-    X('b_scap', 'Band pull-aparts · scapular pull-ups · push-up plus', '15 · 8 · 10', 'Shoulder-blade control before load.', { sec: 'Warm-up', sets: 3, reps: 10, rest: 20, m: ['upperback', 'traps', 'chest', 'reardelts'], pl: 'Frontal + Transverse', j: 'Scapula', c: 'Dynamic' }),
-    X('b_ytw', 'Y-T-W on incline bench · wrist circles', '6 each', 'Lower trap, rotator cuff, wrists.', { sec: 'Warm-up', sets: 3, reps: 6, rest: 15, m: ['traps', 'reardelts', 'forearms'], c: 'Concentric' }),
+    X('b_scap', 'Band pull-aparts · scapular pull-ups · push-up plus', '15 · 8 · 10', 'Shoulder-blade control before load.', { sec: 'Warm-up', rest: 20, m: ['upperback', 'traps', 'chest', 'reardelts'], pl: 'Frontal + Transverse', j: 'Scapula', c: 'Dynamic', parts: [
+      { n: 'Band pull-aparts', r: 15, rest: 20, q: 'band pull apart' },
+      { n: 'Scapular pull-ups', r: 8, rest: 20, q: 'scapular pull up' },
+      { n: 'Push-up plus', r: 10, q: 'push up plus serratus' }] }),
+    X('b_ytw', 'Y-T-W on incline bench · wrist circles', '6 each', 'Lower trap, rotator cuff, wrists.', { sec: 'Warm-up', rest: 15, m: ['traps', 'reardelts', 'forearms'], c: 'Concentric', parts: [
+      { n: 'Y-raise on incline bench', r: 6, rest: 15, q: 'incline bench Y raise' },
+      { n: 'T-raise on incline bench', r: 6, rest: 15, q: 'incline bench T raise' },
+      { n: 'W-raise on incline bench', r: 6, rest: 15, q: 'incline bench W raise' },
+      { n: 'Wrist circles', r: 6, x: '6 / direction', q: 'wrist circles warm up' }] }),
     X('b_bthrow', 'Bench press throws (Smith; or lying med-ball chest throw)', '4 × 3 · light, max speed', 'Ballistic push: the force path of a straight punch.', { sec: 'Power and throws', sets: 4, reps: 3, rest: 90, m: ['chest', 'triceps', 'delts'], pl: 'Sagittal', j: 'Shoulder flexion, elbow extension', c: 'Ballistic' }),
     X('b_slam', 'Medicine-ball overhead slam', '3 × 5', 'Full-body power with a hard exhale.', { sec: 'Power and throws', sets: 3, reps: 5, rest: 60, m: ['lats', 'abs', 'triceps'], pl: 'Sagittal', c: 'Ballistic' }),
     X('b_lpunch', 'Half-kneeling landmine punch-press', '3 × 5 / side · fast', 'Soviet-style punch strength with a safe arc. Do not punch with loose weights.', { sec: 'Power and throws', sets: 3, reps: 5, rest: 60, m: ['delts', 'chest', 'triceps', 'obliques'], pl: 'Transverse + Sagittal', c: 'Dynamic effort' }),
@@ -115,20 +174,34 @@
     X('b_dip', 'Dips', '3 × 6–8 · stop at 3/10 elbow pain', 'Ladder U.', { sec: 'Strength', ladRef: 'U', sets: 3, reps: 7, rest: 90, m: ['chest', 'triceps', 'delts'], pl: 'Sagittal', j: 'Shoulder extension, elbow extension', c: 'Concentric + eccentric' }),
     X('b_lrot', 'Landmine rotation (angled barbell)', '3 × 6 / side', 'Rotational strength; turn from the hips.', { sec: 'Strength', sets: 3, reps: 6, rest: 60, m: ['obliques', 'glutes', 'delts'], pl: 'Transverse', j: 'Hip and trunk rotation', c: 'Concentric + eccentric' }),
     X('b_bext', '45° back extension, 2 s hold at top', '2 × 12', 'Glutes and spinal erectors; counters the desk posture.', { sec: 'Strength', sets: 2, reps: 12, rest: 60, m: ['lowback', 'glutes', 'hamstrings'], pl: 'Sagittal', j: 'Hip and spine extension', c: 'Concentric + hold' }),
-    X('b_face', 'Face pull + band external rotation', '2 × 15 · 2 × 12', 'Shoulder health after many punches.', { sec: 'Strength', sets: 4, reps: 13, rest: 45, m: ['reardelts', 'upperback', 'traps'], pl: 'Transverse', j: 'External rotation', c: 'Concentric' }),
+    X('b_face', 'Face pull + band external rotation', '2 × 15 · 2 × 12', 'Shoulder health after many punches.', { sec: 'Strength', rest: 45, m: ['reardelts', 'upperback', 'traps'], pl: 'Transverse', j: 'External rotation', c: 'Concentric', parts: [
+      { n: 'Face pull', r: 15, sets: 2, rest: 45, q: 'cable face pull' },
+      { n: 'Band external rotation', r: 12, sets: 2, rest: 45, q: 'band shoulder external rotation' }] }),
     X('b_grip', 'Plate pinch hold or wrist roller', '2 × 30 s', 'Forearm strength.', { sec: 'Strength', k: 'hold', sets: 2, s: 30, rest: 60, m: ['forearms'], c: 'Isometric' }),
     X('b_roll', 'Ab roller from the knees', '3 × 6–8', 'Anti-extension. Ladder C.', { sec: 'Core', sets: 3, reps: 7, rest: 60, m: ['abs', 'lats'], pl: 'Sagittal', j: 'Anti-extension', c: 'Eccentric + concentric' }),
     X('b_knee', 'Hanging knee raise', '2 × 10', 'Path to levers; adds hang time for grip.', { sec: 'Core', sets: 2, reps: 10, rest: 60, m: ['abs', 'hipflexors', 'forearms'], pl: 'Sagittal', j: 'Hip flexion', c: 'Concentric + eccentric' }),
     X('b_cd1', 'Easy walk or very slow rope', '45 s · HR below 120', 'Heart rate down gradually.', { sec: 'Cool-down', k: 'timed', s: 45, m: ['calves'] }),
     X('b_cd2', 'Dead hang, relaxed', '30 s', 'Lengthens the lats; decompresses the spine.', { sec: 'Cool-down', k: 'hold', s: 30, m: ['lats', 'forearms'], c: 'Static stretch' }),
     X('b_cd3', 'Doorway or rack chest stretch', '30 s / side', 'Chest after throws and dips; counters guard posture.', { sec: 'Cool-down', k: 'hold', sets: 2, s: 30, rest: 5, m: ['chest', 'delts'], c: 'Static stretch' }),
-    X('b_cd4', 'Forearm flexor, then extensor stretch (gentle)', '20 s each / arm', 'Keeps the right elbow calm. No pain.', { sec: 'Cool-down', k: 'hold', sets: 4, s: 20, rest: 3, m: ['forearms'], c: 'Static stretch' }),
-    X('b_cd5', 'Upper-trap and levator stretch', '20 s / side each', 'Traps get injured often. No neck extension.', { sec: 'Cool-down', k: 'hold', sets: 4, s: 20, rest: 3, m: ['traps', 'neck'], c: 'Static stretch' }),
+    X('b_cd4', 'Forearm flexor, then extensor stretch (gentle)', '20 s each / arm', 'Keeps the right elbow calm. No pain.', { sec: 'Cool-down', k: 'hold', m: ['forearms'], c: 'Static stretch', parts: [
+      { n: 'Forearm flexor stretch · right', s: 20, rest: 3, q: 'wrist flexor stretch' },
+      { n: 'Forearm extensor stretch · right', s: 20, rest: 3, q: 'wrist extensor stretch' },
+      { n: 'Forearm flexor stretch · left', s: 20, rest: 3, q: 'wrist flexor stretch' },
+      { n: 'Forearm extensor stretch · left', s: 20, q: 'wrist extensor stretch' }] }),
+    X('b_cd5', 'Upper-trap and levator stretch', '20 s / side each', 'Traps get injured often. No neck extension.', { sec: 'Cool-down', k: 'hold', m: ['traps', 'neck'], c: 'Static stretch', parts: [
+      { n: 'Upper-trap stretch · right', s: 20, rest: 3, q: 'upper trapezius stretch' },
+      { n: 'Upper-trap stretch · left', s: 20, rest: 3, q: 'upper trapezius stretch' },
+      { n: 'Levator stretch · right', s: 20, rest: 3, q: 'levator scapulae stretch' },
+      { n: 'Levator stretch · left', s: 20, q: 'levator scapulae stretch' }] }),
     X('b_cd6', 'Slow nasal breathing, long exhale', '30 s', 'Moves the body toward rest.', { sec: 'Cool-down', k: 'timed', s: 30, m: ['abs'], c: 'Breathing' })
   ]};
 
   S.fieldA = { id: 'fieldA', name: 'Field A · aerobic + ladder', short: 'FLD A', load: 'Low–Med', mins: 80, items: [
-    X('fa_wu', 'Warm-up: rope, leg swings, ankle rocks, A-march', '8 min', 'Prepares ankles and hips for running.', { sec: 'Warm-up', k: 'timed', s: 480, m: ['calves', 'hipflexors', 'glutes'] }),
+    X('fa_wu', 'Warm-up: rope, leg swings, ankle rocks, A-march', '8 min', 'Prepares ankles and hips for running.', { sec: 'Warm-up', k: 'timed', m: ['calves', 'hipflexors', 'glutes'], parts: [
+      { n: 'Rope skipping', s: 120, q: 'easy rope skipping warm up' },
+      { n: 'Leg swings', s: 120, q: 'leg swings front and side' },
+      { n: 'Ankle rocks', s: 120, q: 'knee to wall ankle rocks' },
+      { n: 'A-march', s: 120, q: 'A march running drill' }] }),
     X('fa_z2', 'Zone 2 run–walk', 'Run 3 min / walk 1 min × 8 · 120–140 bpm', 'Aerobic base. You can run ~800 m now, so start with run–walk. ~80% of endurance training is low intensity (Seiler).', { sec: 'Aerobic', k: 'interval', sets: 8, s: 180, rest: 60, m: ['quads', 'calves', 'hamstrings', 'glutes'], pl: 'Sagittal', c: 'Aerobic' }),
     X('fa_lP', 'Ladder · Pull', 'Current step', 'Your current Pull step. Practise far from failure; test when fresh.', { sec: 'Ladder (25 min)', lad: 'P' }),
     X('fa_lU', 'Ladder · Push', 'Current step', 'Your current Push step.', { sec: 'Ladder (25 min)', lad: 'U' }),
@@ -143,8 +216,15 @@
   ]};
 
   S.fieldB = { id: 'fieldB', name: 'Field B · speed, plyos, intervals', short: 'FLD B', load: 'High', mins: 80, items: [
-    X('fb_wu', 'Rope, leg swings, walking lunge with rotation', '6 min', 'All three planes before speed work.', { sec: 'Warm-up', k: 'timed', s: 360, m: ['hipflexors', 'glutes', 'obliques', 'calves'] }),
-    X('fb_drill', 'A-skip, B-skip, wall drill, pogo', '2 × 20 m · 3 × 5 s · 2 × 10', 'Sprint mechanics; strong ankles.', { sec: 'Warm-up', sets: 4, reps: 1, rest: 30, m: ['hipflexors', 'calves', 'glutes'], pl: 'Sagittal', c: 'Fast SSC' }),
+    X('fb_wu', 'Rope, leg swings, walking lunge with rotation', '6 min', 'All three planes before speed work.', { sec: 'Warm-up', k: 'timed', m: ['hipflexors', 'glutes', 'obliques', 'calves'], parts: [
+      { n: 'Rope skipping', s: 120, q: 'easy rope skipping warm up' },
+      { n: 'Leg swings', s: 120, q: 'leg swings front and side' },
+      { n: 'Walking lunge with rotation', s: 120, q: 'walking lunge with rotation' }] }),
+    X('fb_drill', 'A-skip, B-skip, wall drill, pogo', '2 × 20 m · 3 × 5 s · 2 × 10', 'Sprint mechanics; strong ankles.', { sec: 'Warm-up', rest: 30, m: ['hipflexors', 'calves', 'glutes'], pl: 'Sagittal', c: 'Fast SSC', parts: [
+      { n: 'A-skip', x: '20 m', sets: 2, rest: 30, q: 'A skip sprint drill' },
+      { n: 'B-skip', x: '20 m', sets: 2, rest: 30, q: 'B skip sprint drill' },
+      { n: 'Wall drill', s: 5, sets: 3, rest: 30, q: 'wall drill sprint acceleration' },
+      { n: 'Pogo jumps', r: 10, sets: 2, rest: 30, q: 'pogo jumps' }] }),
     X('fb_fall', 'Falling start sprint', '4 × 10 m · 85–90%', 'Acceleration mechanics.', { sec: 'Accel · decel · COD', sets: 4, reps: 1, rest: 90, m: ['glutes', 'quads', 'calves', 'hamstrings'], pl: 'Sagittal', j: 'Triple extension', c: 'Concentric' }),
     X('fb_stop', 'Sprint, stop in 3 steps, hold 3 s', '4 × 10 m', 'Deceleration = eccentric strength; weak decel is a common knee-injury cause.', { sec: 'Accel · decel · COD', sets: 4, reps: 1, rest: 90, m: ['quads', 'glutes', 'hamstrings'], pl: 'Sagittal', j: 'Triple flexion', c: 'Eccentric' }),
     X('fb_cod', '5-10-5 pro agility', '3 × · 75% speed', 'Change-of-direction patterns. Block 2: T-drill. Block 3: reactive.', { sec: 'Accel · decel · COD', sets: 3, reps: 1, rest: 90, m: ['adductors', 'glutes', 'quads', 'calves'], pl: 'Frontal', c: 'Eccentric + concentric' }),
@@ -159,7 +239,15 @@
 
   S.recovery = { id: 'recovery', name: 'Recovery', short: 'REC', load: 'Low', mins: 85, items: [
     X('r_easy', 'Long easy movement: hike, walk, or easy jog', '45–60 min · below 135 bpm', 'Aerobic volume with no recovery cost.', { k: 'timed', s: 2700, m: ['quads', 'calves', 'glutes'], c: 'Aerobic' }),
-    X('r_yoga', 'Yoga flow: 5 Surya Namaskar, low lunge, pigeon, lizard, forward fold', '20 min', 'Hips and ankles. Yoga has the best evidence for sleep among exercise types.', { k: 'timed', s: 1200, m: ['hipflexors', 'glutes', 'hamstrings', 'calves'], c: 'Dynamic + static' }),
+    X('r_yoga', 'Yoga flow: 5 Surya Namaskar, low lunge, pigeon, lizard, forward fold', '20 min', 'Hips and ankles. Yoga has the best evidence for sleep among exercise types.', { k: 'timed', m: ['hipflexors', 'glutes', 'hamstrings', 'calves'], c: 'Dynamic + static', parts: [
+      { n: 'Surya Namaskar · 5 rounds', s: 300, q: 'surya namaskar sun salutation' },
+      { n: 'Low lunge · left', s: 120, q: 'low lunge yoga pose' },
+      { n: 'Low lunge · right', s: 120, q: 'low lunge yoga pose' },
+      { n: 'Pigeon · left', s: 150, q: 'pigeon pose yoga' },
+      { n: 'Pigeon · right', s: 150, q: 'pigeon pose yoga' },
+      { n: 'Lizard · left', s: 120, q: 'lizard pose yoga' },
+      { n: 'Lizard · right', s: 120, q: 'lizard pose yoga' },
+      { n: 'Forward fold', s: 120, q: 'standing forward fold yoga' }] }),
     X('r_lH', 'Ladder · Handstand (light)', 'Current step', 'Skill practice, not fatigue. Recovery day: practise only, no test.', { sec: 'Skill ladder (10 min)', lad: 'H', light: true }),
     X('r_lC', 'Ladder · Core (light)', 'Current step', 'Skill practice, not fatigue. Recovery day: practise only, no test.', { sec: 'Skill ladder (10 min)', lad: 'C', light: true }),
     X('r_tennis', 'Tennis-ball series', '6 drills × 45 s', 'Coordination and both sides, at an easy pace.', { k: 'drills', ds: 45, m: ['forearms', 'calves', 'feet'], c: 'Skill' })

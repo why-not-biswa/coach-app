@@ -1,5 +1,5 @@
 /* Offline cache. Change CACHE when you publish new files so phones get the update. */
-var CACHE = 'kobe-v0.5.0';
+var CACHE = 'kobe-v0.7.0';
 var FILES = ['./', 'index.html', 'style.css', 'data.js', 'app.js', 'manifest.webmanifest', 'fonts/AlbertSans-latin.woff2', 'fonts/AlbertSans-latin-ext.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', function (e) {

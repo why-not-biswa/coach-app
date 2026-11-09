@@ -1,4 +1,4 @@
-/* Let's be Kobe · design 0.4 · Nordic birch.
+/* Let's be Kobe · design 0.7 · Nordic birch.
    Layout: one column, 20-pt margins, 8-pt rhythm. Main actions live in the thumb zone. */
 /* Albert Sans: geometric sans inspired by Scandinavian design (SIL Open Font License). Bundled for offline use. */
 @font-face { font-family: 'Albert Sans'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(fonts/AlbertSans-latin.woff2) format('woff2');
@@ -11,7 +11,7 @@
   --surface2: #f7f6f2;
   --ink: #1f2623;         /* charcoal with a green bias */
   --ink2: #4a534e;
-  --muted: #7b847e;
+  --muted: #636c66;       /* 4.8:1 on birch: small grey text must stay readable */
   --line: #e4e1d9;
   --accent: #2f5d50;      /* pine */
   --accent-ink: #ffffff;
@@ -26,18 +26,18 @@
 }
 :root[data-theme="dark"] {
   --bg: #111513;
-  --surface: #181d1a;
-  --surface2: #1d2320;
+  --surface: #1e2522;     /* lifted from the background, so cards read as cards */
+  --surface2: #242c28;
   --ink: #e9e7e1;
   --ink2: #c4c8c3;
   --muted: #8f9892;
-  --line: #29302c;
+  --line: #343c38;
   --accent: #93c2b0;      /* sage */
   --accent-ink: #0f1a16;
   --accent-soft: #213029;
   --clay: #d98d78;
   --clay-soft: #33231e;
-  --shadow: none;
+  --shadow: 0 0 0 1px rgba(255, 255, 255, .07);  /* a hairline edge in place of a shadow */
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -120,38 +120,83 @@ a.btn { text-decoration: none; color: var(--ink); }
 .wd .c.today { border-color: var(--accent); }
 .wd .c.miss { color: var(--clay); border: 1.5px dashed var(--clay); }  /* dashed = missed: readable without color */
 
-/* journal: rings read by position and line style, not color */
-.dring { transform: rotate(-90deg); flex: none; }
-.dring circle, svg line.rd, svg line.rm, svg line.rt { fill: none; }
-.rt { stroke: var(--line); stroke-width: 3; }
-.rd { stroke: var(--accent); stroke-width: 3.6; }
-.rm { stroke: var(--clay); stroke-width: 2.2; stroke-dasharray: 2.2 2.4; }
-svg line.rd, svg line.rm, svg line.rt { stroke-linecap: butt; }
+/* Day pie: one slice per module. Texture carries the meaning: solid = done, diagonal lines = missed, pale = to do.
+   The gap between slices is the color of what sits behind the pie. */
+.pie { flex: none; display: block; --gap: var(--bg); }
+.card .pie, .mday.sel .pie { --gap: var(--surface); }
+.pie path { stroke: var(--gap); stroke-width: 1.8; stroke-linejoin: round; }
+.pie .pd { fill: var(--accent); }
+.pie .pm { fill: url(#hatch); }
+.pie .pt { fill: var(--line); }
+.pie rect.pm { stroke: var(--clay); stroke-width: 1; }
 .mgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
 .mday { display: grid; justify-items: center; gap: 2px; padding: 6px 0; border: 0; background: none; border-radius: 12px; cursor: pointer; font-size: 13px; color: var(--ink2); }
 .mday.out { opacity: .35; }
 .mday.today .num { font-weight: 700; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .mday.sel { background: var(--surface); box-shadow: var(--shadow); }
 .legend { margin-top: 14px; }
-.dcard { margin-top: 12px; }
-.tgs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.tg { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border-radius: 15px; font-size: 13.5px; background: var(--surface2); border: 1px solid var(--line); color: var(--ink2); }
-.tg b { font-weight: 700; font-size: 13px; }
-.tg.ok { background: var(--accent-soft); border-color: transparent; color: var(--ink); }
-.tg.bad { border: 1.5px dashed var(--clay); color: var(--clay); background: transparent; }
-.quote { font-size: 15px; color: var(--ink2); font-style: italic; margin-top: 10px; padding-left: 10px; border-left: 2px solid var(--line); }
-.tl { position: relative; padding-left: 16px; }
-.tl:before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: var(--line); border-radius: 1px; }
+/* Diary day. Three voices: date in the accent (with a Today tag), title in ink, facts in grey.
+   The day pie sits on the right. Problems on their own line (symbol + word). Your words in a quote. */
+.dcard { margin-top: 10px; display: block; width: 100%; text-align: left; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.dcard .dh { display: flex; align-items: flex-start; gap: 12px; }
+.dcard .ddate { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; color: var(--accent); }
+.tagp.now { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-height: 20px; padding: 0 8px; font-size: 11px; }
+.dcard .dt { font-size: 17px; font-weight: 650; margin-top: 3px; color: var(--ink); }
+.dcard .dl, .wsum { font-size: 14px; color: var(--muted); margin-top: 3px; }
+.dcard .dp, .wsum .dp { font-size: 14px; color: var(--clay); margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.dp b { font-weight: 700; margin-right: 4px; }
+.dcard:active { transform: scale(.99); }
+blockquote.quote { margin: 12px 0 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--accent); font-size: 15px; line-height: 1.45; color: var(--ink2); font-style: italic; }
+blockquote.quote cite { display: block; font-style: normal; font-size: 12px; color: var(--muted); margin-top: 3px; }
+/* Diary timeline: a thin line joins the days; one dot per day; today's dot is filled. */
+.tl { position: relative; padding-left: 18px; }
+.tl:before { content: ""; position: absolute; left: 5px; top: 26px; bottom: 26px; width: 2px; background: var(--line); border-radius: 1px; }
 .tl-i { position: relative; }
-.tl-i:before { content: ""; position: absolute; left: -15px; top: 30px; width: 10px; height: 10px; border-radius: 5px; background: var(--bg); border: 2px solid var(--accent); }
-ol.drills li { margin-top: 10px; }
+.tl-i:before { content: ""; position: absolute; left: -18px; top: 28px; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.tl-i.now:before { background: var(--accent); }
+/* Steps inside one exercise (drills, parts): number, name, time, and a Watch link per step. */
+.li.step { cursor: default; align-items: flex-start; padding-right: 6px; }
+.li.step .iconbtn { color: var(--accent); margin-top: -6px; flex: none; }
+.li.step.muted .t1 { color: var(--muted); }
 
-/* hero */
-.hero { background: var(--surface); border-radius: 22px; padding: 20px; box-shadow: var(--shadow); }
-.hero .k { font-size: 13px; color: var(--accent); font-weight: 600; }
-.hero .n { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin: 4px 0 6px; }
-.hero .m { font-size: 15px; color: var(--muted); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.hero .btn.big { margin-top: 18px; }
+/* Today header: date (small), greeting (large), then the season block as its own element. */
+/* Dateline: small tracked capitals (an eyebrow, not a shout). Weekday in the accent, a hairline, the date in grey. */
+.dateline { display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; margin-top: 2px; }
+.dateline .dw { color: var(--accent); }
+.dateline .dm { color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.dateline .dm:before { content: ""; width: 18px; height: 1px; background: var(--muted); opacity: .6; }
+/* Coach message with steps: a bold lead, then one instruction per line. */
+.note .mt { display: block; font-weight: 650; }
+.note ul.cb { margin: 6px 0 0; padding: 0; list-style: none; }
+.note ul.cb li { position: relative; padding-left: 16px; }
+.note ul.cb li + li { margin-top: 3px; }
+.note ul.cb li:before { content: ""; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .7; }
+.note .more { display: block; font-size: 13px; margin-top: 8px; opacity: .8; }
+.block { margin-top: 12px; }
+.block .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bpill { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
+.bpill b { font-weight: 650; }
+.bweek { font-size: 14px; color: var(--muted); }
+/* Week bar: done = solid, this week = outline, later = empty track. Read by shape, not color. */
+.bbar { display: flex; gap: 4px; margin-top: 8px; }
+.bbar i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); box-sizing: border-box; }
+.bbar i.done { background: var(--accent); }
+.bbar i.now { background: transparent; border: 2px solid var(--accent); height: 8px; margin-top: -1px; border-radius: 4px; }
+
+/* Up next: the label sits above the card, like every other section. */
+.hero { background: var(--surface); border-radius: 22px; padding: 18px 20px 14px; box-shadow: var(--shadow); }
+.hero .kick { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.tagp { display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--ink2); }
+.hero .n { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin: 6px 0 2px; }
+.hero .s2 { font-size: 15px; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.stats > div { padding: 0 10px; }
+.stats > div:first-child { padding-left: 0; }
+.stats > div + div { border-left: 1px solid var(--line); }
+.stats b { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 650; white-space: nowrap; }
+.stats > div > span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.hero .btn.big { margin-top: 16px; }
+.li .ic { width: 26px; display: grid; place-items: center; color: var(--accent); flex: none; }
 
 /* session page */
 .topbar { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin: 0 -8px; }
@@ -183,9 +228,31 @@ textarea, input[type=text], input[type=url] { width: 100%; background: var(--sur
 textarea { min-height: 80px; resize: vertical; }
 details summary { cursor: pointer; color: var(--accent); font-size: 15px; list-style: none; padding: 8px 0; }
 details summary::-webkit-details-marker { display: none; }
-.why { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 18px; }
-.why .tag { font-size: 13px; color: var(--accent); font-weight: 600; }
-.why .b { font-size: 19px; font-weight: 600; line-height: 1.3; margin: 2px 0 8px; }
+/* Philosophy as a creed. The first principle is the statement, on the accent; a large quote mark sits behind it.
+   The other principles: a large number, the claim in bold, the reason in a quieter voice. */
+.creed { position: relative; overflow: hidden; background: var(--accent); color: var(--accent-ink); border-radius: 22px; padding: 22px 20px 24px; box-shadow: var(--shadow); }
+/* At night a bright card is too loud: dark mode uses deep green, with the accent only on the label and the quote mark. */
+:root[data-theme="dark"] .creed { background: var(--accent-soft); color: var(--ink); }
+:root[data-theme="dark"] .creed .ck, :root[data-theme="dark"] .creed .qm { color: var(--accent); }
+:root[data-theme="dark"] .creed .qm { opacity: .22; }
+.creed .qm { position: absolute; right: 8px; top: -34px; font-size: 160px; line-height: 1; font-weight: 700; opacity: .13; pointer-events: none; }
+.creed .ck { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .75; }
+.creed .c1 { position: relative; font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1.08; margin-top: 12px; }
+.creed .c2 { position: relative; font-size: 17px; line-height: 1.4; margin-top: 8px; opacity: .88; max-width: 30ch; }
+.principles { padding: 2px 18px; margin-top: 10px; }
+.pr { display: grid; grid-template-columns: 46px 1fr; gap: 4px; padding: 16px 0; }
+.pr + .pr { border-top: 1px solid var(--line); }
+.pn { font-size: 26px; font-weight: 400; color: var(--accent); line-height: 1.05; letter-spacing: -.02em; }
+.pl { font-size: 17px; font-weight: 650; line-height: 1.3; }
+.pb { font-size: 15px; color: var(--ink2); line-height: 1.45; margin-top: 4px; }
+
+/* Why card: category pill, one lead sentence, the coach's reason, then a fact grid. Nothing folded. */
+.why .b { font-size: 17px; font-weight: 650; line-height: 1.35; margin: 10px 0 6px; }
+.why .w { font-size: 15px; color: var(--ink2); line-height: 1.5; margin: 0; }
+.facts { display: grid; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.facts span { display: block; font-size: 12px; color: var(--muted); }
+.facts b { display: block; font-size: 14px; font-weight: 600; margin-top: 2px; }
+.vlink summary { font-size: 14px; padding: 10px 2px 0; }
 
 /* tabs */
 #tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr);

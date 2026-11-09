@@ -1,15 +1,33 @@
-/* Let's be Kobe · app 0.4 (design pass). Vanilla JS, offline, all data on this phone.
-   Same plan, rules, ladder, and data format as 0.3. */
+/* Let's be Kobe · app 0.7.0. Vanilla JS, offline, all data on this phone.
+   Data format v:1 (see CLAUDE.md). */
 (function () {
   'use strict';
   var P = window.PLAN;
   var KEY = 'coach.v1';
-  var VERSION = '0.5';
+  var VERSION = '0.7.0';
 
   /* ---------- storage ---------- */
   function fresh() { return { v: 1, settings: { hrmax: 187, theme: 'auto', voice: true }, days: {}, links: {}, ladder: { cur: Object.assign({}, P.ladderStart), hist: [], pass: {} } }; }
+  // Fill any missing part of v:1 data. Used by load() and importText(), so old backups always open.
+  function norm(s) {
+    s.settings = Object.assign({ hrmax: 187, theme: 'auto', voice: true }, s.settings || {});
+    s.days = s.days && typeof s.days === 'object' ? s.days : {};
+    s.links = s.links || {};
+    s.ladder = s.ladder || {};
+    s.ladder.cur = Object.assign({}, P.ladderStart, s.ladder.cur || {});
+    s.ladder.hist = s.ladder.hist || [];
+    s.ladder.pass = s.ladder.pass || {};
+    return s;
+  }
+  // Never replace saved data with a fresh state without a copy. If the saved text cannot be read, keep it under KEY + '.unreadable'.
+  var loadWarn = false;
   function load() {
-    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) { s.settings = Object.assign({ hrmax: 187, theme: 'auto', voice: true }, s.settings || {}); s.ladder.pass = s.ladder.pass || {}; return s; } } catch (e) {}
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch (e) { return fresh(); }
+    if (!raw) return fresh();
+    try { var s = JSON.parse(raw); if (s && s.v === 1) return norm(s); } catch (e) {}
+    try { localStorage.setItem(KEY + '.unreadable', raw); } catch (e) {}
+    loadWarn = true;
     return fresh();
   }
   var st = load();
@@ -120,11 +138,12 @@
     mute: '<path d="M4 10v4h3.5L12 18V6L7.5 10z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
     watch: '<rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.5 9.5v5l4-2.5z"/>',
     leaf: '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19l7-7"/>',
-    chev: '<path d="M10 6l6 6-6 6"/>'
+    chev: '<path d="M10 6l6 6-6 6"/>',
+    swap: '<path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"/>'
   };
   function ic(n, cls) { return '<svg class="i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + I[n] + '</svg>'; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function toast(t) { var el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(function () { el.remove(); }, 2200); }
+  function toast(t, ms) { var el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(function () { el.remove(); }, ms || 2200); }
 
   /* ---------- UI state, theme ---------- */
   var ui = { tab: 'today', date: TODAY, sid: null, sheet: null, bothFlows: false, week: mondayOf(TODAY), month: TODAY.slice(0, 7), jview: 'month', jday: TODAY, prog: '', ci: null, confirmReset: false };
@@ -168,12 +187,13 @@
     var out = [], d = dayR(ds), ph = phaseOf(ds), today = planned(ds);
     var miss = missedMid(addDays(ds, -1));
     if (ds <= TODAY && miss.length) out.push(['miss', 'Yesterday, ' + miss.map(sName).join(' and ') + ' was missed. Do not add it to today. Continue the plan.']);
-    if (ph.pre) out.push(['', 'Block 0 starts Monday 9 November. Do the baseline tests, and the Morning and Night modules.']);
+    // A message can carry steps (third item): they show as a list, one instruction per line.
+    if (ph.pre) out.push(['', 'Before Block ' + P.phases[0].n + ' starts', ['Do the baseline tests.', 'Do the Morning module.', 'Do the Night module.']]);
     if (!ph.pre && !ph.post && ph.week % 4 === 0) out.push(['warn', 'Deload and retest week. Cut volume by about 40%. Keep the intensity.']);
     var avg = hrAvg(ds), easier = false;
     if (d.hr && avg && d.hr - avg >= 7) { easier = true; out.push(['stop', 'Resting HR is ' + Math.round(d.hr - avg) + ' bpm above your average. Make today one level easier.']); }
     if (d.sleep && +d.sleep < 6) { easier = true; out.push(['stop', 'Under 6 hours of sleep. Make today one level easier.']); }
-    if (easier) out.push(['warn', 'Easier: a hard session at RPE 6 with plyos and intervals halved, or Field A at Zone 2. A moderate session becomes Recovery.']);
+    if (easier) out.push(['warn', 'Make today one level easier', ['A hard session: RPE 6, with plyos and intervals halved.', 'Or Field A at Zone 2.', 'A moderate session becomes Recovery.']]);
     var prev = middleOf(addDays(ds, -1));
     if (today.indexOf('gymA') >= 0 && prev.indexOf('fieldB') >= 0) out.push(['warn', 'Field B was yesterday. Keep 48 hours before Gym A, or swap today.']);
     if (today.indexOf('fieldB') >= 0 && prev.indexOf('gymA') >= 0) out.push(['warn', 'Gym A was yesterday. Keep 48 hours before Field B, or swap today.']);
@@ -182,9 +202,11 @@
       for (var i = 1; i <= 3; i++) { if (middleOf(addDays(ds, -i)).some(function (s) { return rank(s) >= 3; })) streak++; else break; }
       if (streak >= 2) out.push(['warn', streak + ' hard days in a row. Make today light or moderate.']);
     }
+    // One warning per exercise: the most recent day in the last 8 with pain above 3/10.
+    var painSeen = {};
     for (var k = 0; k <= 7; k++) {
-      var dd = st.days[addDays(ds, -k)]; if (!dd || !dd.logs) continue;
-      Object.keys(dd.logs).forEach(function (id) { var l = dd.logs[id]; if (l && l.pain !== '' && l.pain != null && +l.pain > 3 && ITEM[id]) out.push(['stop', 'Pain ' + l.pain + '/10 on ' + getItem(id).name + ' (' + nice(addDays(ds, -k)) + '). Lower the load on it next time.']); });
+      var pds = addDays(ds, -k), dd = st.days[pds]; if (!dd || !dd.logs) continue;
+      Object.keys(dd.logs).forEach(function (id) { var l = dd.logs[id]; if (painSeen[id] || !ITEM[id] || !l || l.pain === '' || l.pain == null || +l.pain <= 3) return; painSeen[id] = true; out.push(['stop', 'Pain ' + l.pain + '/10 on ' + getItem(id).name + ' (' + nice(pds) + '). Lower the load on it next time.']); });
     }
     if (parse(ds).getDay() === 6) out.push(['', 'A drink tonight only if tomorrow is easy. Max 2, water between, protein first.']);
     var order = { stop: 0, miss: 1, warn: 2, '': 3 };
@@ -204,31 +226,51 @@
     }
     return h + '</div>';
   }
+  // Season block: a pill (block number and name), the week, and a bar with one segment per week.
+  // Done weeks are solid, this week has an outline, later weeks are an empty track: shape carries the meaning, not color.
+  // Date line: weekday in the accent, date in grey, small tracked capitals (an eyebrow, like a magazine dateline).
+  // On another day the title is already the weekday, so the dateline says how far that day is from today.
+  function dateLine(ds) {
+    var d = parse(ds), n = diffDays(TODAY, ds);
+    var w = n === 0 ? DOWL[d.getDay()] : n === -1 ? 'Yesterday' : n === 1 ? 'Tomorrow' : n < 0 ? -n + ' days ago' : 'In ' + n + ' days';
+    return '<div class="dateline"><span class="dw">' + w + '</span><span class="dm">' + d.getDate() + ' ' + MONL[d.getMonth()] + '</span></div>';
+  }
+  function msgHtml(m) { return (m[2] ? '<b class="mt">' + esc(m[1]) + '</b><ul class="cb">' + m[2].map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : esc(m[1])); }
+  function blockEl(ds) {
+    var ph = phaseOf(ds), p = ph.p, weeks = Math.ceil((diffDays(p.start, p.end) + 1) / 7), bars = '';
+    var right = ph.pre ? (diffDays(ds, p.start) === 1 ? 'Starts tomorrow' : 'Starts ' + nice(p.start)) : ph.post ? 'Season complete' : 'Week ' + ph.week + ' of ' + weeks;
+    for (var i = 1; i <= weeks; i++) bars += '<i class="' + (ph.post || (!ph.pre && i < ph.week) ? 'done' : !ph.pre && i === ph.week ? 'now' : '') + '"></i>';
+    return '<div class="block"><div class="top"><span class="bpill"><b>Block ' + p.n + '</b>· ' + esc(p.name) + '</span><span class="bweek">' + right + '</span></div>' +
+      '<div class="bbar" aria-hidden="true">' + bars + '</div></div>';
+  }
   function vToday() {
     var ds = ui.date, d = dayR(ds), ph = phaseOf(ds), isT = ds === TODAY, hr = new Date().getHours();
     var greet = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-    var phTxt = ph.pre ? 'Block 0 starts Monday 9 November' : ph.post ? 'Season complete' : 'Block ' + ph.p.n + ' · ' + ph.p.name + ' · week ' + ph.week;
     var h = '<div class="topbar"><button class="iconbtn" data-act="day" data-n="-1" aria-label="Previous day">' + ic('back') + '</button>' +
       (isT ? '<span></span>' : '<button class="btn ghost" data-act="goToday">Back to today</button>') +
       '<button class="iconbtn" data-act="day" data-n="1" aria-label="Next day">' + ic('fwd') + '</button></div>' +
-      '<div class="eyebrow">' + longDate(ds) + '</div><h1 class="large">' + (isT ? greet : DOWL[parse(ds).getDay()]) + '</h1><div class="sub">' + esc(phTxt) + '</div>' + weekStrip(ds);
+      dateLine(ds) + '<h1 class="large">' + (isT ? greet : DOWL[parse(ds).getDay()]) + '</h1>' + blockEl(ds) + weekStrip(ds);
 
     h += '<div class="stack" style="margin-top:14px">';
     if (d.hr || d.sleep) h += '<button class="li card" data-act="checkin" style="box-shadow:var(--shadow)">' + ic('leaf') + '<div class="sp"><div class="t1">' + [d.sleep ? d.sleep + ' h sleep' : '', d.hr ? d.hr + ' bpm resting' : ''].filter(Boolean).join(' · ') + '</div><div class="t2">Check-in done</div></div>' + ic('chev', 'sm') + '</button>';
     else h += '<button class="li card" data-act="checkin">' + ic('leaf') + '<div class="sp"><div class="t1">Morning check-in</div><div class="t2">Sleep and resting heart rate · 2 taps</div></div>' + ic('chev', 'sm') + '</button>';
     var msgs = coachMsgs(ds);
-    if (msgs.length) { var m = msgs[0]; h += '<button class="note coachline ' + (m[0] === 'stop' || m[0] === 'miss' ? 'clay' : '') + '" data-act="coach">' + '<span class="sp">' + esc(m[1]) + (msgs.length > 1 ? ' <span class="muted">· ' + (msgs.length - 1) + ' more</span>' : '') + '</span></button>'; }
+    if (msgs.length) { var m = msgs[0]; h += '<button class="note coachline ' + (m[0] === 'stop' || m[0] === 'miss' ? 'clay' : '') + '" data-act="coach">' + '<span class="sp">' + msgHtml(m) + (msgs.length > 1 ? '<span class="more">' + (msgs.length - 1) + ' more from your coach ›</span>' : '') + '</span></button>'; }
 
     var order = ['morning'].concat(planned(ds), ['night']), next = order.filter(function (s) { return !sessDone(ds, s); })[0];
+    h += '</div>';
+    // Up next: label outside the card. Inside: module + flow tag, title, purpose, then 3 values with labels.
     if (next) {
       var s = P.sessions[next], pr = sessionProgress(next, ds), tt = splitName(s.name);
-      h += '<div class="hero"><div class="k">' + (pr.n ? 'Continue' : 'Up next') + '</div><div class="n">' + esc(tt[0]) + (next === 'morning' ? ' · Flow ' + flowOf(ds) : '') + '</div>' +
-        '<div class="m"><span class="num">' + s.mins + ' min</span>' + dots(s.load) + '<span class="num">' + (pr.n ? pr.n + ' of ' : '') + pr.total + ' exercises</span></div>' +
-        (tt[1] ? '<div class="cap" style="margin-top:6px">' + esc(tt[1]) + '</div>' : '') +
+      var kick = next === 'morning' ? 'Morning' : next === 'night' ? 'Night' : 'Main session';
+      h += '<div class="sec">' + (pr.n ? 'Continue' : 'Up next') + '</div><div class="hero">' +
+        '<div class="kick">' + kick + (next === 'morning' ? '<span class="tagp">Flow ' + flowOf(ds) + '</span>' : '') + '</div>' +
+        '<div class="n">' + esc(tt[0]) + '</div>' + (tt[1] ? '<div class="s2">' + esc(tt[1]) + '</div>' : '') +
+        '<div class="stats"><div><b class="num">' + s.mins + ' min</b><span>Time</span></div><div><b>' + dots(s.load) + '</b><span>Load</span></div>' +
+        '<div><b class="num">' + (pr.n ? pr.n + ' of ' + pr.total : pr.total) + '</b><span>' + (pr.n ? 'Exercises done' : 'Exercises') + '</span></div></div>' +
         '<button class="btn pri big" data-act="play" data-sid="' + next + '">' + ic('play') + (pr.n ? 'Continue' : 'Start') + '</button>' +
         '<button class="btn ghost full" style="margin-top:4px" data-act="open" data-sid="' + next + '">See the exercises</button></div>';
-    } else h += '<div class="hero"><div class="k">Today</div><div class="n">All done.</div><div class="m">Quality work. Recover well tonight.</div></div>';
-    h += '</div>';
+    } else h += '<div class="sec">Today</div><div class="hero"><div class="n">All done.</div><div class="s2">Quality work. Recover well tonight.</div></div>';
 
     h += '<div class="sec">Today’s plan</div><div class="list">';
     order.forEach(function (sid) {
@@ -236,7 +278,7 @@
       var lab = sid === 'morning' ? 'Morning' : sid === 'night' ? 'Night' : 'Main session';
       h += '<button class="li" data-act="open" data-sid="' + sid + '"><span class="check ' + (done ? 'on' : '') + '">' + (done ? ic('check', 'sm') : '') + '</span><div class="sp"><div class="t1">' + esc(tt[0]) + '</div><div class="t2">' + lab + ' · ' + s.mins + ' min · ' + (pr.n && !done ? pr.n + '/' + pr.total + ' done' : LOAD[s.load][0]) + '</div></div>' + ic('chev', 'sm') + '</button>';
     });
-    h += '</div><button class="btn ghost" style="margin-top:8px" data-act="change">Change today’s session</button>';
+    h += '<button class="li" data-act="change"><span class="ic">' + ic('swap') + '</span><div class="sp"><div class="t1">Change the main session</div><div class="t2">Travel day, or an easier day</div></div>' + ic('chev', 'sm') + '</button></div>';
     return h;
   }
 
@@ -288,18 +330,24 @@
     var ds = ui.date, d = dayR(ds), it = getItem(id), sid = ITEM[id].s, l = d.logs[id], lite = isLite(sid, it), link = st.links[id];
     var q = encodeURIComponent((it.lad ? it.stepText : it.name).replace(/\(.*?\)/g, '').trim() + ' exercise form');
     var h = shHead(it.name, esc((it.track ? it.track + ' · ' : '') + it.dose));
-    h += '<div class="row" style="margin-top:16px"><a class="btn sp" href="' + esc(link || 'https://www.youtube.com/results?search_query=' + q + '+shorts') + '" target="_blank" rel="noopener">' + ic('watch') + 'Watch</a>' +
+    var pn = phaseOf(ds).p.n, parts = partsOf(it, pn, true);
+    // With steps, each step has its own Watch. The whole-exercise Watch shows only for a saved link.
+    h += '<div class="row" style="margin-top:16px">' + (!parts || link ? '<a class="btn sp" href="' + esc(link || ytUrl(q)) + '" target="_blank" rel="noopener">' + ic('watch') + 'Watch</a>' : '') +
       '<button class="btn pri sp" data-act="startHere" data-id="' + id + '">' + ic('play', 'sm') + 'Start here</button></div>';
+    // Your own video link lives with Watch, the thing it changes.
+    h += '<details class="vlink"><summary>' + (link ? 'Your video is saved · change' : 'Use your own video link') + '</summary><input type="url" inputmode="url" data-act="link" data-id="' + id + '" value="' + esc(link || '') + '" placeholder="https://… YouTube or Instagram" style="margin-top:8px"><p class="cap">When saved, Watch opens your link. Clear it to go back to the search.</p></details>';
+    if (parts) {
+      h += '<div class="lbl" style="margin-top:18px">Steps · the player runs them in order</div><div class="list">' + parts.map(function (p, i) {
+        var off = p.from != null && pn < p.from, pq = encodeURIComponent((p.q || p.n.replace(/\(.*?\)/g, '') + ' exercise form').trim());
+        return '<div class="li step' + (off ? ' muted' : '') + '"><span class="cap num" style="width:20px;align-self:flex-start;padding-top:2px">' + (i + 1) + '</span><div class="sp"><div class="t1">' + esc(p.n) + '</div><div class="t2 num">' + esc(dur(p)) + (off ? ' · from Block ' + p.from : '') + '</div>' +
+          (p.d ? '<div class="cap" style="margin-top:2px">' + esc(p.d) + '</div>' : '') + '</div><a class="iconbtn" href="' + esc(ytUrl(pq)) + '" target="_blank" rel="noopener" aria-label="Watch ' + esc(p.n) + '">' + ic('watch') + '</a></div>';
+      }).join('') + '</div>';
+    }
     if (it.m && it.m.length) h += '<div class="lbl" style="margin-top:18px">Feel it in</div><div class="chips">' + it.m.map(function (m) { return '<span class="chip static">' + (MN[m] || m) + '</span>'; }).join('') + '</div>';
     if (it.lad) {
       var nx = st.ladder.cur[it.lad] < 20 ? P.ladder[it.lad].steps[st.ladder.cur[it.lad]] : 'top of the track';
       h += '<div class="note" style="margin-top:16px">Next step: ' + esc(nx) + '. ' + (it.light ? 'Recovery day: practise only.' : 'Test when fresh. Two passes on different days move you up.') + '</div>';
       if (!it.light) h += '<button class="btn full" style="margin-top:10px" data-act="lpass" data-k="' + it.lad + '">' + ic('check', 'sm') + 'Passed the test today · ' + passCount(it.lad) + '/2</button>';
-    }
-    if (it.k === 'drills') {
-      var pn = phaseOf(ds).p.n;
-      h += '<div class="lbl" style="margin-top:18px">How to · ' + (it.ds || 60) + ' s each, the player runs them in order</div><ol class="plain drills">' +
-        P.drills.map(function (x) { var off = x.from != null && pn < x.from; return '<li' + (off ? ' class="muted"' : '') + '><b>' + esc(x.n) + '</b>' + (off ? ' · from Block ' + x.from : '') + '<div class="cap">' + esc(x.d) + '</div></li>'; }).join('') + '</ol>';
     }
     if (it.ladRef) { var rc = st.ladder.cur[it.ladRef]; h += '<div class="note" style="margin-top:16px">Ladder ' + P.ladder[it.ladRef].name + ', step ' + rc + ': ' + esc(P.ladder[it.ladRef].steps[rc - 1]) + '. Keep these sets far from failure.</div>'; }
 
@@ -310,13 +358,17 @@
         '<div class="lbl" style="margin-top:16px">How it felt</div><div class="chips">' + ['Easy', 'Good', 'Tight', 'Pain'].map(function (f) { return '<button class="chip ' + (feel === f ? 'on' : '') + '" data-act="feel" data-id="' + id + '" data-v="' + f + '">' + f + '</button>'; }).join('') + '</div>';
       if (feel === 'Pain') h += '<div class="lbl" style="margin-top:14px">Pain, 0 to 10</div>' + chipRow(id, 'pain', l && l.pain, 0, 10);
     } else {
-      var last = lastLog(id, ds), sets = (l && l.sets) || [], rows = Math.max(sets.length, Math.min(it.sets || 1, 8));
+      // With steps: one row per set of each step, under the step name. Rows are numbered inside each step.
+      var flat = parts ? flatParts(parts) : null;
+      var last = lastLog(id, ds), sets = (l && l.sets) || [], rows = Math.max(sets.length, flat ? flat.length : Math.min(it.sets || 1, 8));
       if (last) h += '<div class="cap" style="margin-bottom:10px">Last time, ' + nice(last.ds) + ': ' + esc(summ(last.l)) + '</div>';
       for (var i = 0; i < rows; i++) {
-        var x = sets[i] || {}, pl = (last && last.l.sets && last.l.sets[i]) || {};
-        h += '<div class="setline"><span class="cap num">' + (i + 1) + '</span>' +
-          (it.k === 'reps' ? stepper(id, i, 'r', x.r, pl.r || it.reps, 'reps') + stepper(id, i, 'l', x.l, pl.l || '', 'kg')
-            : stepper(id, i, 't', x.t, pl.t || it.s, 'seconds') + stepper(id, i, 'l', x.l, pl.l || '', 'kg')) + '</div>';
+        var x = sets[i] || {}, pl = (last && last.l.sets && last.l.sets[i]) || {}, f = flat && flat[i];
+        if (f && f.k === 1) h += '<div class="cap" style="margin:' + (i ? 14 : 0) + 'px 0 6px;font-weight:600">' + esc(f.p.n) + ' · ' + esc(dur(f.p)) + '</div>';
+        var timed = f ? !!f.p.s : it.k !== 'reps';
+        h += '<div class="setline"><span class="cap num">' + (f ? f.k : i + 1) + '</span>' +
+          (!timed ? stepper(id, i, 'r', x.r, pl.r || (f ? f.p.r : it.reps), 'reps') + stepper(id, i, 'l', x.l, pl.l || '', 'kg')
+            : stepper(id, i, 't', x.t, pl.t || (f ? f.p.s : it.s), 'seconds') + stepper(id, i, 'l', x.l, pl.l || '', 'kg')) + '</div>';
       }
       h += '<div class="row" style="margin-top:12px"><button class="btn ghost" data-act="addSet" data-id="' + id + '">+ Add a set</button><span class="sp"></span><button class="btn" data-act="quick" data-id="' + id + '">' + ic('check', 'sm') + 'Done as planned</button></div>';
       h += '<div class="lbl" style="margin-top:16px">Effort (RPE)</div>' + chipRow(id, 'rpe', l && l.rpe, 1, 10);
@@ -324,12 +376,18 @@
     }
     if (l && l.pain !== '' && l.pain != null && +l.pain > 3) h += '<div class="note clay" style="margin-top:12px">Pain above 3/10. Stop or lower the load now. Next time, start lighter (rule 2).</div>';
     h += '<div class="lbl" style="margin-top:16px">Note</div><textarea data-act="lnote" data-id="' + id + '" placeholder="Form, side differences, how it felt">' + esc(l && l.note || '') + '</textarea>';
-    h += '<details style="margin-top:10px"><summary>' + (link ? 'Your saved video · change' : 'Save your own video link') + '</summary><input type="url" inputmode="url" data-act="link" data-id="' + id + '" value="' + esc(link || '') + '" placeholder="https://… YouTube or Instagram"><p class="cap">When saved, Watch opens your link. Clear it to go back to the search.</p></details>';
-
-    var b = benefit(it), focus = (it.m || []).map(function (m) { return MN[m] || m; }).join(', ');
-    h += '<div class="why"><div class="tag">Why · ' + esc(b[0] || 'Your plan') + '</div><div class="b">' + esc(b[1]) + '</div>' + (focus ? '<div class="cap">Focus on: ' + esc(focus) + '</div>' : '') +
-      '<details><summary>The science</summary><p class="cap">' + esc(it.why) + '</p><div class="chips" style="margin-top:8px">' + [it.pl ? 'Plane: ' + it.pl : '', it.j ? 'Joint: ' + it.j : '', it.c || ''].filter(Boolean).map(function (t) { return '<span class="chip static">' + esc(t) + '</span>'; }).join('') + '</div></details></div>';
+    // Why card: category pill, the benefit as one sentence, the coach's reason in full, and a fact grid. Nothing folded.
+    var b = benefit(it), lead = b[1] ? b[1].charAt(0).toUpperCase() + b[1].slice(1) : '';
+    var facts = [['Plane', it.pl], ['Joint', it.j], ['Type', it.c]].filter(function (f) { return f[1] && f[1] !== 'n/a'; });
+    h += '<div class="sec">Why this exercise</div><div class="card why">' + (b[0] ? '<span class="bpill">' + esc(b[0]) + '</span>' : '') +
+      (lead ? '<div class="b">' + esc(lead) + '</div>' : '') + '<p class="w"' + (lead || b[0] ? '' : ' style="margin-top:0"') + '>' + esc(it.why) + '</p>' +
+      (facts.length ? '<div class="facts" style="grid-template-columns:repeat(' + facts.length + ',1fr)">' + facts.map(function (f) { return '<div><span>' + f[0] + '</span><b>' + esc(f[1]) + '</b></div>'; }).join('') + '</div>' : '') + '</div>';
     return h;
+  }
+  function ytUrl(q) { return 'https://www.youtube.com/results?search_query=' + q + '+shorts'; }
+  function dur(p) {
+    var s = p.s, t = !s ? String(p.x || p.r || '') : s < 60 ? s + ' s' : Math.floor(s / 60) + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : '');
+    return p.sets > 1 ? p.sets + ' × ' + t : t;
   }
   function summ(l) {
     var s = (l.sets || []).filter(function (x) { return x && (x.r || x.l || x.t); }).map(function (x) { return [x.r ? x.r + ' reps' : '', x.l ? x.l + ' kg' : '', x.t ? x.t + ' s' : ''].filter(Boolean).join(' · '); }).join(', ');
@@ -351,7 +409,7 @@
   function shCoach() {
     var msgs = coachMsgs(ui.date);
     return shHead('From your coach', 'Only what matters today.') + '<div class="stack" style="margin-top:16px">' +
-      msgs.map(function (m) { return '<div class="note ' + (m[0] === 'stop' || m[0] === 'miss' ? 'clay' : '') + '">' + esc(m[1]) + '</div>'; }).join('') + '</div>' +
+      msgs.map(function (m) { return '<div class="note ' + (m[0] === 'stop' || m[0] === 'miss' ? 'clay' : '') + '">' + msgHtml(m) + '</div>'; }).join('') + '</div>' +
       '<p class="cap" style="margin-top:16px">These come from your 7 rules. See them in the Coach tab.</p>';
   }
   function shChange() {
@@ -397,54 +455,66 @@
   }
 
   /* ---------- Journal ---------- */
-  /* Journal: month of rings (default) or diary. Rings are read by position and line style, never by color alone:
-     outer = Morning, middle = Main session, inner = Night; solid = done, dashed = missed, faint = to do. */
-  function modState(ds, m) {
-    var sids = m === 'main' ? planned(ds) : [m];
-    if (sids.every(function (s) { return sessDone(ds, s); })) return 'done';
-    if (ds < TODAY && ds >= P.phases[0].start) return 'miss';
-    return 'todo';
+  /* Day pie: one slice per module, clockwise from the top: Morning, the main session(s), Night.
+     Read by texture, never by color alone: solid = done, diagonal lines = missed, pale = to do. */
+  function modules(ds) { return ['morning'].concat(planned(ds), ['night']); }
+  function modStates(ds) {
+    return modules(ds).map(function (s) { return sessDone(ds, s) ? 'pd' : ds < TODAY && ds >= P.phases[0].start ? 'pm' : 'pt'; });
   }
-  function dayRing(ds, size) {
-    var s = '<svg viewBox="0 0 40 40" width="' + size + '" height="' + size + '" aria-hidden="true" class="dring">';
-    [['morning', 16], ['main', 11.5], ['night', 7]].forEach(function (m) {
-      var stt = modState(ds, m[0]);
-      s += '<circle cx="20" cy="20" r="' + m[1] + '" class="' + (stt === 'done' ? 'rd' : stt === 'miss' ? 'rm' : 'rt') + '"/>';
+  function pieSvg(states, size) {
+    var n = states.length, s = '<svg viewBox="0 0 40 40" width="' + size + '" height="' + size + '" class="pie" aria-hidden="true">';
+    function pt(a) { var r = a * Math.PI / 180; return (20 + 19 * Math.cos(r)).toFixed(2) + ' ' + (20 + 19 * Math.sin(r)).toFixed(2); }
+    states.forEach(function (c, i) {
+      var a = -90 + i * 360 / n, b = a + 360 / n;
+      s += '<path class="' + c + '" d="M20 20 L' + pt(a) + ' A19 19 0 0 1 ' + pt(b) + ' Z"/>';
     });
     return s + '</svg>';
   }
-  function ringLegend() {
-    function sample(cls) { return '<svg width="28" height="10" aria-hidden="true"><line x1="2" y1="5" x2="26" y2="5" class="' + cls + '"/></svg>'; }
-    return '<div class="legend card"><div class="row" style="align-items:center;gap:14px">' +
-      '<svg viewBox="0 0 40 40" width="64" height="64" aria-hidden="true" class="dring"><circle cx="20" cy="20" r="16" class="rd"/><circle cx="20" cy="20" r="11.5" class="rm"/><circle cx="20" cy="20" r="7" class="rt"/></svg>' +
-      '<div class="sp cap"><div><b>Outer</b> · Morning</div><div><b>Middle</b> · Main session</div><div><b>Inner</b> · Night</div></div></div>' +
-      '<div class="row" style="gap:16px;margin-top:10px;flex-wrap:wrap"><span class="row cap" style="gap:6px">' + sample('rd') + 'Solid = done</span><span class="row cap" style="gap:6px">' + sample('rm') + 'Dashed = missed</span><span class="row cap" style="gap:6px">' + sample('rt') + 'Faint = to do</span></div></div>';
+  function dayPie(ds, size) { return pieSvg(modStates(ds), size); }
+  function daySummary(ds) {
+    var st2 = modStates(ds), done = st2.filter(function (x) { return x === 'pd'; }).length, miss = st2.filter(function (x) { return x === 'pm'; }).length;
+    return done + ' of ' + st2.length + ' done' + (miss ? ', ' + miss + ' missed' : '');
   }
-  // Tags: every pointer has a symbol and a word, so nothing depends on color.
-  function dayTags(ds) {
-    var d = dayR(ds), all = ['morning'].concat(planned(ds), ['night']), n = all.filter(function (s) { return sessDone(ds, s); }).length, tags = [];
+  function pieLegend() {
+    function sw(c, t) { return '<span class="row cap" style="gap:6px"><svg width="14" height="14" class="pie" aria-hidden="true"><rect class="' + c + '" x="1" y="1" width="12" height="12" rx="3"/></svg>' + t + '</span>'; }
+    return '<div class="legend card"><div class="row" style="align-items:center;gap:14px">' + pieSvg(['pd', 'pm', 'pt'], 56) +
+      '<div class="sp cap"><div>One slice per module, clockwise from the top:</div><div style="margin-top:2px"><b>Morning</b> · <b>Main session</b> · <b>Night</b></div></div></div>' +
+      '<div class="row" style="gap:16px;margin-top:12px;flex-wrap:wrap">' + sw('pd', 'Solid = done') + sw('pm', 'Lines = missed') + sw('pt', 'Pale = to do') + '</div></div>';
+  }
+  // One day in the journal: a quiet line of facts, and problems apart. A problem always has a symbol and a word.
+  function dayInfo(ds) {
+    var d = dayR(ds), all = ['morning'].concat(planned(ds), ['night']), n = all.filter(function (s) { return sessDone(ds, s); }).length, line = [], probs = [];
     var miss = all.filter(function (s) { return !sessDone(ds, s); });
-    if (n === all.length) tags.push(['ok', '✓', n + '/' + all.length + ' done']);
-    else if (n) tags.push(['', '◐', n + '/' + all.length + ' done']);
-    if (ds < TODAY && ds >= P.phases[0].start && miss.length) tags.push(['bad', '×', 'Missed: ' + miss.map(function (s) { return s === 'morning' ? 'Morning' : s === 'night' ? 'Night' : sName(s); }).join(', ')]);
+    if (n) line.push(n === all.length ? 'All ' + n + ' done' : n + ' of ' + all.length + ' done');
+    if (ds < TODAY && ds >= P.phases[0].start && miss.length) probs.push(['×', 'Missed: ' + miss.map(function (s) { return s === 'morning' ? 'Morning' : s === 'night' ? 'Night' : sName(s); }).join(', ')]);
     var feel = null; all.forEach(function (s) { if (d.sessions[s] && d.sessions[s].feel && s !== 'morning' && s !== 'night') feel = d.sessions[s].feel; });
-    if (feel) tags.push(['', '☺', 'Felt ' + feel.toLowerCase()]);
-    if (d.sleep) tags.push(['', '☾', d.sleep + ' h sleep']);
-    if (d.hr) tags.push(['', '♥', d.hr + ' bpm']);
+    if (feel) line.push('Felt ' + feel.toLowerCase());
+    if (d.sleep) line.push(d.sleep + ' h sleep');
+    if (d.hr) line.push(d.hr + ' bpm');
     var pain = null; Object.keys(d.logs || {}).forEach(function (id) { var l = d.logs[id]; if (l && l.pain !== '' && l.pain != null && +l.pain > 0 && (!pain || +l.pain > pain[0]) && ITEM[id]) pain = [+l.pain, getItem(id).name]; });
-    if (pain) tags.push([pain[0] > 3 ? 'bad' : '', '!', 'Pain ' + pain[0] + '/10 · ' + pain[1]]);
-    (st.ladder.log || []).filter(function (x) { return x.d === ds; }).forEach(function (x) { tags.push(['ok', '▲', P.ladder[x.k].name + ' ' + (x.up ? 'up to step ' + x.s : 'test passed')]); });
-    return tags;
+    if (pain) { if (pain[0] > 3) probs.push(['!', 'Pain ' + pain[0] + '/10 · ' + pain[1]]); else line.push('Pain ' + pain[0] + '/10'); }
+    (st.ladder.log || []).filter(function (x) { return x.d === ds; }).forEach(function (x) { line.push('▲ ' + P.ladder[x.k].name + (x.up ? ' step ' + x.s : ' test passed')); });
+    return { line: line, probs: probs };
   }
-  function tagHtml(t) { return '<span class="tg ' + t[0] + '"><b aria-hidden="true">' + t[1] + '</b>' + esc(t[2]) + '</span>'; }
-  function dayCard(ds, withOpen) {
-    var d = dayR(ds), mids = planned(ds), notes = [];
-    ['morning'].concat(mids, ['night']).forEach(function (s) { if (d.sessions[s] && d.sessions[s].note) notes.push(d.sessions[s].note); });
-    var tags = dayTags(ds);
-    return '<div class="card dcard"><div class="row">' + dayRing(ds, 40) + '<div class="sp"><div class="t1" style="font-weight:600">' + nice(ds) + ' · ' + esc(mids.map(sName).join(' + ')) + '</div>' +
-      (ds > TODAY ? '<div class="cap">Planned</div>' : '') + '</div>' + (withOpen ? '<button class="btn ghost" data-act="pick" data-ds="' + ds + '">Open</button>' : '') + '</div>' +
-      (tags.length ? '<div class="tgs">' + tags.map(tagHtml).join('') + '</div>' : ds <= TODAY ? '<div class="cap" style="margin-top:8px">Nothing logged.</div>' : '') +
-      notes.map(function (n) { return '<div class="quote">“' + esc(n) + '”</div>'; }).join('') + '</div>';
+  function probHtml(p) { return '<div class="dp">' + p.map(function (x) { return '<span><b aria-hidden="true">' + x[0] + '</b>' + esc(x[1]) + '</span>'; }).join('') + '</div>'; }
+  // Your words for the day: session notes (from the session page or the end of the player).
+  // With no session note, the first exercise note, with the exercise name under it.
+  function dayQuotes(ds) {
+    var d = dayR(ds), out = [];
+    modules(ds).forEach(function (s) { if (d.sessions[s] && d.sessions[s].note) out.push({ t: d.sessions[s].note, by: sName(s) }); });
+    if (!out.length) Object.keys(d.logs || {}).some(function (id) { var l = d.logs[id]; if (l && l.note && ITEM[id]) { out.push({ t: l.note, by: getItem(id).name }); return true; } return false; });
+    return out;
+  }
+  // Diary day: date (accent) with a Today tag, title (ink), one quiet line (grey), the day pie on the right,
+  // problems apart (symbol + word), and your own words in quotes. Tap the card to open the day.
+  function dayCard(ds) {
+    var mids = planned(ds), inf = dayInfo(ds), q = dayQuotes(ds);
+    var line = ds > TODAY ? 'Planned' : inf.line.length ? inf.line.join(' · ') : 'Nothing logged yet';
+    return '<button class="card dcard" data-act="pick" data-ds="' + ds + '" aria-label="Open ' + longDate(ds) + ': ' + daySummary(ds) + '">' +
+      '<div class="dh"><div class="sp"><div class="ddate">' + nice(ds) + (ds === TODAY ? '<span class="tagp now">Today</span>' : '') + '</div>' +
+      '<div class="dt">' + esc(mids.map(sName).join(' + ')) + '</div><div class="dl">' + esc(line) + '</div></div>' + dayPie(ds, 36) + '</div>' +
+      (inf.probs.length ? probHtml(inf.probs) : '') +
+      q.map(function (x) { return '<blockquote class="quote">“' + esc(x.t) + '”<cite>' + esc(x.by) + '</cite></blockquote>'; }).join('') + '</button>';
   }
   function vJournal() {
     var mode = ui.jview || 'month';
@@ -458,11 +528,11 @@
       for (var i = 0; i < 42; i++) {
         var dt = new Date(start); dt.setDate(start.getDate() + i); var ds = iso(dt);
         if (i >= 35 && dt.getMonth() !== m) break;
-        h += '<button class="mday' + (dt.getMonth() !== m ? ' out' : '') + (ds === TODAY ? ' today' : '') + (ds === ui.jday ? ' sel' : '') + '" data-act="jday" data-ds="' + ds + '" aria-label="' + longDate(ds) + '"><span class="num">' + dt.getDate() + '</span>' + dayRing(ds, 40) + '</button>';
+        h += '<button class="mday' + (dt.getMonth() !== m ? ' out' : '') + (ds === TODAY ? ' today' : '') + (ds === ui.jday ? ' sel' : '') + '" data-act="jday" data-ds="' + ds + '" aria-label="' + longDate(ds) + ': ' + daySummary(ds) + '"><span class="num">' + dt.getDate() + '</span>' + dayPie(ds, 34) + '</button>';
       }
       h += '</div>';
-      if (ui.jday) h += dayCard(ui.jday, true);
-      h += ringLegend();
+      if (ui.jday) h += dayCard(ui.jday);
+      h += pieLegend();
     } else {
       var mon = ui.week, sun = addDays(mon, 6), done = 0, tot = 0, missN = 0, sl = [];
       h += '<div class="topbar" style="margin-top:10px"><button class="iconbtn" data-act="wk" data-n="-7" aria-label="Previous week">' + ic('back') + '</button><div class="title" style="font-size:18px">' + parse(mon).getDate() + ' ' + MON[parse(mon).getMonth()] + ' – ' + parse(sun).getDate() + ' ' + MON[parse(sun).getMonth()] + '</div><button class="iconbtn" data-act="wk" data-n="7" aria-label="Next week">' + ic('fwd') + '</button></div>';
@@ -472,12 +542,12 @@
         var all = ['morning'].concat(planned(x), ['night']); tot += all.length; done += all.filter(function (s) { return sessDone(x, s); }).length;
         if (x < TODAY && x >= P.phases[0].start) missN += all.filter(function (s) { return !sessDone(x, s); }).length;
         if (dayR(x).sleep) sl.push(+dayR(x).sleep);
-        cards += '<div class="tl-i">' + dayCard(x, true) + '</div>';
+        cards += '<div class="tl-i' + (x === TODAY ? ' now' : '') + '">' + dayCard(x) + '</div>';
       }
-      var sum = [['ok', '✓', done + '/' + tot + ' done']];
-      if (missN) sum.push(['bad', '×', missN + ' missed']);
-      if (sl.length) sum.push(['', '☾', 'avg ' + (Math.round(sl.reduce(function (a, b) { return a + b; }, 0) / sl.length * 10) / 10) + ' h sleep']);
-      h += tot ? '<div class="tgs" style="margin:4px 0 12px">' + sum.map(tagHtml).join('') + '</div><div class="tl">' + cards + '</div>' : '<p class="cap">Nothing yet this week. Days appear here as you live them.</p>';
+      // Week summary: the same quiet line as a day, with missed sessions apart.
+      var sum = [done + ' of ' + tot + ' done'];
+      if (sl.length) sum.push('avg ' + (Math.round(sl.reduce(function (a, b) { return a + b; }, 0) / sl.length * 10) / 10) + ' h sleep');
+      h += tot ? '<div class="wsum" style="margin:0 2px 4px">' + esc(sum.join(' · ')) + (missN ? probHtml([['×', missN + ' missed']]) : '') + '</div><div class="tl">' + cards + '</div>' : '<p class="cap">Nothing yet this week. Days appear here as you live them.</p>';
     }
     return h;
   }
@@ -500,7 +570,7 @@
     days.forEach(function (ds) { var all = ['morning'].concat(planned(ds), ['night']); if (all.every(function (s) { return sessDone(ds, s); })) full = true; });
     if (days.length) for (var x = days[0]; x <= TODAY; x = addDays(x, 1)) { var dd = st.days[x], any = dd && Object.keys(dd.sessions || {}).some(function (k) { return dd.sessions[k].done; }); run = any ? run + 1 : 0; best = Math.max(best, run); }
     var steps = 0; Object.keys(P.ladder).forEach(function (k) { steps += Math.max(0, st.ladder.cur[k] - P.ladderStart[k]); });
-    return [['First session', total >= 1], ['A full day', full], ['Seven days moving', best >= 7], ['10 sessions', total >= 10], ['50 sessions', total >= 50], ['100 sessions', total >= 100], ['First ladder step', steps >= 1], ['5 ladder steps', steps >= 5], ['Block 0 complete', TODAY > '2026-12-06' && total >= 20]];
+    return [['First session', total >= 1], ['A full day', full], ['Seven days moving', best >= 7], ['10 sessions', total >= 10], ['50 sessions', total >= 50], ['100 sessions', total >= 100], ['First ladder step', steps >= 1], ['5 ladder steps', steps >= 5], ['Block ' + P.phases[0].n + ' complete', TODAY > P.phases[0].end && total >= 20]];
   }
   function vProgress() {
     var mon = mondayOf(TODAY), plannedN = 0, doneN = 0, missed = [];
@@ -552,7 +622,7 @@
     var c = document.getElementById(id); if (!c) return;
     var dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight, acc = cssv('--accent'), mut = cssv('--muted'), ln = cssv('--line'), clay = cssv('--clay');
     c.width = w * dpr; c.height = h * dpr; var g = c.getContext('2d'); g.scale(dpr, dpr);
-    g.font = '12px -apple-system, system-ui, sans-serif'; g.fillStyle = mut;
+    g.font = '12px ' + cssv('--font'); g.fillStyle = mut;
     if (!pts.length) { g.fillText('No data yet.', 0, 20); return; }
     var vs = pts.map(function (p) { return p.v; }), lo = ymin != null ? ymin : Math.min.apply(null, vs), hi = ymax != null ? ymax : Math.max.apply(null, vs);
     if (lo === hi) { lo -= 1; hi += 1; }
@@ -576,7 +646,13 @@
     function z(a, b) { return Math.round(hm * a) + '–' + Math.round(hm * b); }
     var h = '<div class="topbar"><span></span><button class="iconbtn" data-act="settings" aria-label="Settings">' + ic('gear') + '</button></div>' +
       '<h1 class="large">Coach</h1><div class="sub">Russian method. Longevity first. Muscle is the result.</div>';
-    h += '<div class="sec">Philosophy</div><div class="card"><ol class="plain">' + P.philosophy.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ol></div>';
+    // Philosophy as a creed: principle 1 is the statement on the accent color; principles 2 onward each get a large
+    // number, the claim in bold, and the reason under it. The text is the coach's; only the layout splits it at the first "." or ":".
+    function claim(p) { var m = p.match(/^(.+?)[.:]\s+(.+)$/); return m ? [m[1] + (p.charAt(m[1].length) === '.' ? '.' : ''), m[2].charAt(0).toUpperCase() + m[2].slice(1)] : [p, '']; }
+    var c0 = claim(P.philosophy[0]);
+    h += '<div class="sec">Philosophy</div><div class="creed"><div class="qm" aria-hidden="true">“</div><div class="ck">The creed</div>' +
+      '<div class="c1">' + esc(c0[0]) + '</div>' + (c0[1] ? '<div class="c2">' + esc(c0[1]) + '</div>' : '') + '</div>' +
+      '<div class="card principles">' + P.philosophy.slice(1).map(function (p, i) { var c = claim(p); return '<div class="pr"><div class="pn num">' + pad(i + 2) + '</div><div><div class="pl">' + esc(c[0]) + '</div>' + (c[1] ? '<div class="pb">' + esc(c[1]) + '</div>' : '') + '</div></div>'; }).join('') + '</div>';
     h += '<div class="sec">The 7 rules</div><div class="list">' + P.rules.map(function (r, i) { return '<div class="li" style="cursor:default;align-items:flex-start"><span class="num title" style="width:24px;font-size:17px">' + (i + 1) + '</span><div class="sp"><div class="t1">' + r[0] + '</div><div class="t2">' + esc(r[1]) + '</div></div></div>'; }).join('') + '</div>';
     h += '<div class="sec">Season</div><div class="list">' + P.phases.map(function (p) { var cur = p.n === ph.p.n && !ph.pre; return '<div class="li" style="cursor:default;align-items:flex-start' + (cur ? ';background:var(--accent-soft)' : '') + '"><span class="num title" style="width:24px;font-size:17px">' + p.n + '</span><div class="sp"><div class="t1">' + esc(p.name) + (cur ? ' · now' : '') + '</div><div class="t2">' + nice(p.start) + ' – ' + nice(p.end) + '</div><div class="t2">' + esc(p.focus) + '</div></div></div>'; }).join('') + '</div>';
     h += '<div class="sec">Heart-rate zones · HRmax ' + hm + '</div><div class="list">' +
@@ -601,25 +677,52 @@
   // Stopwatch-style alarm: three double beeps you can hear from a pocket.
   function alarm() { [0, .14, .5, .64, 1.0, 1.14].forEach(function (w) { tone(1318, .1, .8, w, 'triangle'); }); }
   function say(text) {
-    if (!st.settings.voice || !window.speechSynthesis) return;
+    if (T.quiet || !st.settings.voice || !window.speechSynthesis) return;
     try { speechSynthesis.cancel(); var u = new SpeechSynthesisUtterance(text); u.rate = 1; u.pitch = 1; speechSynthesis.speak(u); } catch (e) {}
   }
   function spoken(s) { s = Math.round(s); if (s < 60) return s + ' seconds'; var m = Math.floor(s / 60), r = s % 60; return m + (m === 1 ? ' minute' : ' minutes') + (r ? ' ' + r + ' seconds' : ''); }
-  function speakName(it) { return it.name.replace(/\(.*?\)/g, '').replace(/[·:]/g, ',').trim(); }
+  function speakText(t) { return t.replace(/\(.*?\)/g, '').replace(/(\d)\s*s\b/g, '$1 seconds').replace(/(\d)\s*m\b/g, '$1 metres').replace(/\s*[·:]\s*/g, ', ').replace(/\s+,/g, ',').replace(/\s{2,}/g, ' ').trim(); }
+  function speakName(it) { return speakText(it.name); }
+  // A soft two-note chime between steps of one exercise. The full alarm is for the end of a work or rest period.
+  function chime() { tone(988, .12, .5); tone(1318, .18, .5, .14); }
   function lock() { try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { wl = l; }).catch(function () {}); } catch (e) {} }
   function unlock() { try { if (wl) wl.release(); } catch (e) {} wl = null; }
-  document.addEventListener('visibilitychange', function () { if (!tEl.hidden && document.visibilityState === 'visible') lock(); });
+  // Back from the background: keep the screen on and catch the timer up at once (iOS stops timers while the app is hidden).
+  document.addEventListener('visibilitychange', function () { if (!tEl.hidden && document.visibilityState === 'visible') { lock(); if (T.iv) tick(); } });
 
+  // Steps inside one exercise: the tennis drills (from P.drills) or an item's own `parts`. Each step gets its own
+  // timer, voice cue, and video search. withOff keeps the steps of later blocks (the sheet shows them muted).
+  function partsOf(it, pn, withOff) {
+    var list = it.k === 'drills' ? P.drills.map(function (x) { return { n: x.n, s: it.ds || 60, d: x.d, q: x.q, from: x.from }; }) : it.parts;
+    if (!list) return null;
+    return withOff ? list : list.filter(function (p) { return p.from == null || pn >= p.from; });
+  }
+  // A part with `s` runs on a timer (word "Hold"). A part with `r` (reps) or `x` (text such as '20 m') waits for a tap (word "Set").
+  // `set` is the row in the log: one row per set of every part, in order.
+  function flatParts(parts) {
+    var out = [];
+    parts.forEach(function (p) { var n = p.sets || 1; for (var k = 0; k < n; k++) out.push({ p: p, k: k + 1, of: n }); });
+    return out;
+  }
+  function partSegs(it, parts) {
+    var segs = [], gi = 0;
+    parts.forEach(function (p, j) {
+      var n = p.sets || 1, pt = (j + 1) + ' of ' + parts.length, word = p.s ? 'Hold' : 'Set';
+      for (var k = 0; k < n; k++) {
+        var setOf = n > 1 ? (k + 1) + ' of ' + n : '', last = k === n - 1, nextP = last ? parts[j + 1] : p;
+        segs.push({ label: k ? word + ' ' + setOf : p.n + (setOf ? ' · ' + setOf : ''), secs: p.s || null, work: true, set: gi++, word: word, r: p.r, x: p.x, pn: p.n, pt: pt, setOf: setOf, k0: !k, dd: p.d || '', drill: it.k === 'drills' });
+        if (p.rest && nextP) segs.push({ label: 'Rest', secs: p.rest, work: false, pn: nextP.n, newPart: last });
+      }
+    });
+    return segs;
+  }
   function buildSegs(it, lite, hasNext) {
     var segs = [], n = it.sets || 1, rest = it.rest || 0;
     if (lite && rest > 10) rest = 10;
-    for (var i = 0; i < n; i++) {
+    var parts = partsOf(it, phaseOf(T.ds || ui.date).p.n);
+    if (parts) segs = partSegs(it, parts);
+    else for (var i = 0; i < n; i++) {
       var of = n > 1 ? ' ' + (i + 1) + ' of ' + n : '';
-      if (it.k === 'drills') {
-        var pn = phaseOf(T.ds || ui.date).p.n, dr = P.drills.filter(function (x) { return x.from == null || pn >= x.from; });
-        dr.forEach(function (x, j) { segs.push({ label: x.n, secs: it.ds || 60, work: true, dd: x.d, drill: (j + 1) + ' of ' + dr.length }); });
-        break;
-      }
       if (it.k === 'reps') segs.push({ label: (lite ? 'Go' : 'Set') + of, secs: null, work: true, set: i });
       else if (it.k === 'interval') segs.push({ label: 'Work' + of, secs: it.s, work: true, set: i });
       else segs.push({ label: (it.k === 'hold' ? 'Hold' : 'Go') + of, secs: it.s || 60, work: true, set: i });
@@ -638,7 +741,7 @@
     var qi = 0;
     if (startId) qi = Math.max(0, q.indexOf(startId));
     else for (var k = 0; k < q.length; k++) if (!itemDone(ui.date, q[k])) { qi = k; break; }
-    T.sid = sid; T.q = q; T.ds = ui.date; T.finished = false; T.t0 = Date.now(); T.sfeel = '';
+    T.sid = sid; T.q = q; T.ds = ui.date; T.finished = false; T.t0 = Date.now(); T.sfeel = ''; T.snote = null;
     tEl.hidden = false; applyTheme(); tone(1, .001, .0001); loadEx(qi);
   }
   function loadEx(qi) {
@@ -650,16 +753,20 @@
   function initVals() {
     var s = T.segs[T.i]; T.vals = null; if (!s || s.secs != null || T.lite) return;
     var l = dayR(T.ds).logs[T.item.id], cur = (l && l.sets && l.sets[s.set]) || {}, last = lastLog(T.item.id, T.ds), ls = (last && last.l.sets && last.l.sets[s.set]) || {};
-    T.vals = { r: cur.r || ls.r || T.item.reps || 0, l: cur.l || ls.l || 0 };
+    T.vals = { r: cur.r || ls.r || s.r || T.item.reps || 0, l: cur.l || ls.l || 0 };
   }
   function announce(first) {
     var s = T.segs[T.i], it = T.item; if (!s) return;
     var nextIt = T.q[T.qi + 1] ? getItem(T.q[T.qi + 1]) : null;
-    if (s.dd) say(s.label + '.');
+    if (s.pn && s.work) {
+      var amt = s.secs ? spoken(s.secs) : s.x ? speakText(s.x.replace(/\s*\/\s*/g, ' per ')) : s.r ? s.r + ' reps' : '';
+      say((first ? speakName(it) + '. ' : '') + (s.k0 ? speakText(s.pn) + '. ' : s.word + ' ' + s.setOf + '. ') + (amt ? amt + '.' : ''));
+    }
+    else if (s.pn) say(s.newPart ? 'Rest. Next: ' + speakText(s.pn) + '.' : 'Rest. ' + spoken(s.secs) + '.');
     else if (s.trans) say('Rest. Next: ' + speakName(nextIt) + '.');
     else if (!s.work) say('Rest. ' + spoken(s.secs) + '.');
     else if (first) say(speakName(it) + '. ' + (s.secs ? spoken(s.secs) : it.reps ? it.reps + ' reps' : '') + '.');
-    else say(s.label + '. ' + (s.secs ? spoken(s.secs) : '') );
+    else say(s.label + '.' + (s.secs ? ' ' + spoken(s.secs) + '.' : it.reps && !T.lite ? ' ' + it.reps + ' reps.' : ''));
   }
   function segBar() {
     var d = dayR(T.ds), h = '<div class="segs" aria-hidden="true">';
@@ -682,16 +789,23 @@
       T.q.forEach(function (id) { var l = d.logs[id]; if (l && l.sets) sets += l.sets.filter(function (x) { return x && (x.r || x.l || x.t); }).length; });
       tEl.innerHTML = head + '<div style="margin:auto 0;text-align:center"><div class="eyebrow">' + esc(splitName(S.name)[0]) + '</div><div class="large">Session complete</div><p class="sub">Quality work. Recover well.</p>' +
         '<div class="card" style="margin:18px 0;display:grid;grid-template-columns:repeat(3,1fr);text-align:center"><div><div class="title num">' + mins + '</div><div class="cap">minutes</div></div><div><div class="title num">' + exDone + '</div><div class="cap">exercises</div></div><div><div class="title num">' + sets + '</div><div class="cap">sets logged</div></div></div>' +
-        '<div class="lbl">How did it feel?</div><div class="chips" style="justify-content:center">' + ['Easy', 'Good', 'Hard', 'Too hard'].map(function (f) { return '<button class="chip ' + (T.sfeel === f ? 'on' : '') + '" data-t="sfeel" data-v="' + f + '">' + f + '</button>'; }).join('') + '</div></div>' +
+        '<div class="lbl">How did it feel?</div><div class="chips" style="justify-content:center">' + ['Easy', 'Good', 'Hard', 'Too hard'].map(function (f) { return '<button class="chip ' + (T.sfeel === f ? 'on' : '') + '" data-t="sfeel" data-v="' + f + '">' + f + '</button>'; }).join('') + '</div>' +
+        // One line in your own words. It shows in the Journal, in quotes.
+        '<div class="lbl" style="margin-top:18px;text-align:left">One line about today (optional)</div><input type="text" id="tNote" maxlength="140" value="' + esc(T.snote != null ? T.snote : ((dayR(T.ds).sessions[T.sid] || {}).note || '')) + '" placeholder="A thought to keep" style="text-align:left"></div>' +
         '<button class="btn pri big" data-t="finish">Finish</button><button class="btn ghost full" style="margin-top:6px" data-t="prevEx">Back to the last exercise</button>';
       return;
     }
     var manual = s.secs == null, nextIt = T.q[T.qi + 1] ? getItem(T.q[T.qi + 1]) : null;
     var title = s.trans ? 'Next: ' + nextIt.name : it.name, sub = s.trans ? nextIt.dose : (it.track ? it.track + ' · ' : '') + it.dose;
-    var lab = s.trans ? 'Rest' : s.label + (T.run ? '' : ' · paused');
-    var lab2 = s.dd ? 'Drill ' + s.drill : manual ? (T.lite ? 'Tap Done when finished' : 'Tap Set done when finished') : s.trans ? 'Breathe. Get ready.' : !s.work ? 'Breathe out slowly' : '';
-    if (s.dd) sub = s.dd;
-    var after = s.trans ? '' : T.segs[T.i + 1] && !T.segs[T.i + 1].trans ? 'Then ' + T.segs[T.i + 1].label.toLowerCase() + (T.segs[T.i + 1].secs ? ' · ' + fmt(T.segs[T.i + 1].secs) : '') : nextIt ? 'Next exercise · ' + nextIt.name : 'Last exercise';
+    var lab = s.trans ? 'Rest' : s.label, lab2 = manual ? (T.lite ? 'Tap Done when finished' : 'Tap Set done when finished') : s.trans ? 'Breathe. Get ready.' : !s.work ? 'Breathe out slowly' : '';
+    // A step inside the exercise: its name is the title, the exercise name sits under it.
+    if (s.pn) {
+      title = s.newPart ? 'Next: ' + s.pn : s.pn; sub = s.dd || it.name;
+      if (s.work) { lab = s.setOf ? s.word + ' ' + s.setOf : (s.drill ? 'Drill ' : 'Step ') + s.pt; if (!manual) lab2 = s.setOf ? 'Step ' + s.pt : ''; }
+      if (s.work && manual) sub = [s.x || (s.r ? s.r + ' reps' : ''), it.name].filter(Boolean).join(' · ');
+    }
+    lab += T.run || s.trans ? '' : ' · paused';
+    var after = s.trans ? '' : T.segs[T.i + 1] && !T.segs[T.i + 1].trans ? 'Then ' + (T.segs[T.i + 1].k0 ? T.segs[T.i + 1].label : T.segs[T.i + 1].label.toLowerCase()) +(T.segs[T.i + 1].secs ? ' · ' + fmt(T.segs[T.i + 1].secs) : '') : nextIt ? 'Next exercise · ' + nextIt.name : 'Last exercise';
     var h = head + '<div class="pEx"><button class="iconbtn" data-t="prevEx" aria-label="Previous exercise"' + (T.qi === 0 ? ' disabled style="opacity:.3"' : '') + '>' + ic('back') + '</button>' +
       '<div><div class="n">' + esc(title) + '</div><div class="d">' + esc(sub) + '</div>' + (it.lad && !it.light && !s.trans ? '<button class="pill" data-t="lpass">' + ic('check', 'sm') + 'Passed test · ' + passCount(it.lad) + '/2</button>' : '') + '</div>' +
       '<button class="iconbtn" data-t="nextEx" aria-label="Next exercise">' + ic('fwd') + '</button></div>';
@@ -707,17 +821,42 @@
       : '<button class="btn pri big" data-t="toggle">' + ic(T.run ? 'pause' : 'play') + (T.run ? 'Pause' : 'Resume') + '</button>';
     tEl.innerHTML = h;
   }
+  // Wall-clock time: on iOS, performance.now() can stop while the phone sleeps, Date.now() does not.
   function tick() {
-    var now = performance.now(), dt = (now - T.last) / 1000; T.last = now;
+    var now = Date.now(), dt = Math.max(0, (now - T.last) / 1000); T.last = now;
     var s = T.segs[T.i]; if (!s) return;
     if (s.secs == null) { T.up += dt; var e0 = document.getElementById('tTime'); if (e0) e0.textContent = fmt(T.up); return; }
     var before = Math.ceil(T.left); T.left -= dt; var after = Math.ceil(T.left);
-    if (after !== before && after <= 3 && after > 0) tick3();
-    if (T.left <= 0) { alarm(); nextSeg(); return; }
-    var e = document.getElementById('tTime'); if (e) e.textContent = fmt(T.left);
-    var r = document.getElementById('ringFg'); if (r) r.setAttribute('stroke-dashoffset', ringOffset());
+    if (T.left > 0) {
+      if (dt < 1.5 && after !== before && after <= 3) tick3();
+      var e = document.getElementById('tTime'); if (e) e.textContent = fmt(T.left);
+      var r = document.getElementById('ringFg'); if (r) r.setAttribute('stroke-dashoffset', ringOffset());
+      return;
+    }
+    catchUp(-T.left);
   }
-  function startTick() { if (T.iv) return; T.last = performance.now(); T.iv = setInterval(tick, 200); T.run = true; lock(); }
+  // The segment ended. If the app was asleep, more time may have passed: move through every timed
+  // segment that ended in that time. Stop at a set the user must tap (reps), or at the end of the session.
+  // Only one alarm and one voice cue play, for the segment you arrive at.
+  function catchUp(over) {
+    var startQi = T.qi;
+    T.quiet = true;
+    for (var guard = 0; guard < 500; guard++) {
+      nextSeg();
+      if (T.finished) break;
+      var c = T.segs[T.i];
+      if (!c || c.secs == null) break;
+      if (over < c.secs) { T.left = c.secs - over; break; }
+      over -= c.secs;
+    }
+    T.quiet = false;
+    var cur = T.segs[T.i];
+    // Chime only inside a flow item. In a strength item the end of a rest stays the full alarm (the phone may be on the floor).
+    if (!T.finished && T.qi === startQi && cur && cur.pn && T.lite) chime(); else alarm();
+    if (T.finished) { say('Session complete. Good work.'); return; }
+    drawTimer(); announce(T.i === 0);
+  }
+  function startTick() { if (T.iv) return; T.last = Date.now(); T.iv = setInterval(tick, 200); T.run = true; lock(); }
   function stopTick() { clearInterval(T.iv); T.iv = null; T.run = false; }
   function markDone(id) { var d = dayW(T.ds); d.done = d.done || {}; d.done[id] = true; save(); }
   function finishSession() { stopTick(); unlock(); T.finished = true; drawTimer(); say('Session complete. Good work.'); }
@@ -726,7 +865,7 @@
     if (!T.segs.slice(T.i).some(function (x) { return x.work; })) markDone(T.item.id);
     var s = T.segs[T.i];
     if (!s) { if (T.qi < T.q.length - 1) loadEx(T.qi + 1); else finishSession(); return; }
-    T.left = s.secs || 0; T.up = 0; T.last = performance.now(); initVals();
+    T.left = s.secs || 0; T.up = 0; T.last = Date.now(); initVals();
     if (!T.iv) startTick();
     drawTimer(); announce(false);
   }
@@ -743,7 +882,11 @@
     var b = e.target.closest('[data-t]'); if (!b || b.disabled) return; var a = b.dataset.t;
     tone(1, .001, .0001); // unlocks audio on iOS inside the tap
     if (a === 'close' || a === 'finish') {
-      if (a === 'finish') { var d = dayW(T.ds); d.sessions[T.sid] = d.sessions[T.sid] || {}; d.sessions[T.sid].done = true; if (T.sfeel) d.sessions[T.sid].feel = T.sfeel; save(); toast('Session done. Well done.'); }
+      if (a === 'finish') {
+        var d = dayW(T.ds), tn = document.getElementById('tNote'); d.sessions[T.sid] = d.sessions[T.sid] || {}; d.sessions[T.sid].done = true; if (T.sfeel) d.sessions[T.sid].feel = T.sfeel;
+        if (tn) { var nv2 = tn.value.trim(); if (nv2) d.sessions[T.sid].note = nv2; else delete d.sessions[T.sid].note; }
+        T.snote = null; save(); toast('Session done. Well done.');
+      }
       stopTick(); unlock(); try { speechSynthesis.cancel(); } catch (x) {}
       tEl.hidden = true; ui.date = T.ds; ui.sid = a === 'finish' ? null : T.sid; if (a === 'finish') ui.tab = 'today'; render(); window.scrollTo(0, 0); return;
     }
@@ -758,6 +901,7 @@
     if (a === 'prevEx') { if (T.finished) loadEx(T.qi); else if (T.qi > 0) loadEx(T.qi - 1); }
     if (a === 'sfeel') { T.sfeel = T.sfeel === b.dataset.v ? '' : b.dataset.v; drawTimer(); }
   });
+  tEl.addEventListener('input', function (e) { if (e.target.id === 'tNote') T.snote = e.target.value; });
   tEl.addEventListener('change', function (e) { if (!T.vals) return; if (e.target.id === 'tR') T.vals.r = +e.target.value || 0; if (e.target.id === 'tL') T.vals.l = +e.target.value || 0; });
 
   /* ---------- events (main view and sheet) ---------- */
@@ -768,7 +912,7 @@
     var id = b.dataset.id;
     switch (a) {
       case 'open': ui.sid = b.dataset.sid; render(); window.scrollTo(0, 0); break;
-      case 'play': if (ui.sid !== b.dataset.sid) ui.sid = null; ui.sid = ui.sid || null; ui.sid = b.dataset.sid; render(); openPlayer(b.dataset.sid); break;
+      case 'play': ui.sid = b.dataset.sid; render(); openPlayer(b.dataset.sid); break;
       case 'back': ui.sid = null; render(); window.scrollTo(0, 0); break;
       case 'ex': openSheet({ type: 'ex', id: id }); break;
       case 'startHere': openPlayer(ITEM[id].s, id); break;
@@ -797,7 +941,12 @@
       case 'addSet': var la = logW(id), ia = getItem(id); while (la.sets.length < Math.min(ia.sets || 1, 8)) la.sets.push({}); la.sets.push({}); save(); render(); break;
       case 'quick':
         var iq = getItem(id), lq = logW(id);
-        if (!(lq.sets || []).some(function (x) { return x && (x.r || x.l || x.t); })) { lq.sets = []; for (var k = 0; k < (iq.sets || 1); k++) lq.sets.push(iq.k === 'reps' ? { r: iq.reps || '' } : { t: iq.s || '' }); }
+        var qp = partsOf(iq, phaseOf(ui.date).p.n);
+        if (!(lq.sets || []).some(function (x) { return x && (x.r || x.l || x.t); })) {
+          lq.sets = [];
+          if (qp) flatParts(qp).forEach(function (f) { lq.sets.push(f.p.s ? { t: f.p.s } : { r: f.p.r || '' }); });
+          else for (var k = 0; k < (iq.sets || 1); k++) lq.sets.push(iq.k === 'reps' ? { r: iq.reps || '' } : { t: iq.s || '' });
+        }
         save(); render(); toast('Logged as planned'); break;
       case 'sdone': var ds3 = dayW(ui.date); ds3.sessions[ui.sid] = ds3.sessions[ui.sid] || {}; ds3.sessions[ui.sid].done = !ds3.sessions[ui.sid].done; save(); render(); break;
       case 'wk': ui.week = addDays(ui.week, +b.dataset.n); render(); break;
@@ -843,8 +992,7 @@
   function importText(t) {
     try {
       var s = JSON.parse(t); if (!s || s.v !== 1 || !s.days) throw 0;
-      s.links = s.links || {}; s.settings = Object.assign({ hrmax: 187, theme: 'auto', voice: true }, s.settings || {}); s.ladder = s.ladder || { cur: Object.assign({}, P.ladderStart), hist: [] }; s.ladder.pass = s.ladder.pass || {};
-      st = s; save(); ui.sheet = null; render(); toast('Backup imported');
+      st = norm(s); save(); ui.sheet = null; render(); toast('Backup imported');
     } catch (e) { toast('That is not a backup file from this app.'); }
   }
 
@@ -859,4 +1007,5 @@
   if (window.matchMedia) try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) {}
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(function () {});
   render();
+  if (loadWarn) toast('Saved data could not be read. A copy is kept. Import your last backup in Settings.', 6000);
 })();

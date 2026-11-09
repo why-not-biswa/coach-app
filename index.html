@@ -15,6 +15,12 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Shared texture: diagonal lines mark a missed module in the day pie (read by texture, not color alone). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <rect width="4" height="4" style="fill:var(--clay-soft)"/><rect width="1.6" height="4" style="fill:var(--clay)"/>
+  </pattern>
+</defs></svg>
 <main id="view"></main>
 <nav id="tabs" aria-label="Main">
   <button data-tab="today" data-icon="today">Today</button>
